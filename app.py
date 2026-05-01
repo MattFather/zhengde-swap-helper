@@ -754,7 +754,7 @@ with tab_print:
                 
             with col_pdf:
                 # 【優化1】：將說明文字直接整合進按鈕，並保持按鈕顯眼
-                if st.button("📥 轉換並下載 PDF (手機建議)", use_container_width=True, type="primary"):
+                if st.button("📥 下載 PDF (手機建議)", use_container_width=True, type="primary"):
                     with st.spinner("🚀 伺服器正在努力轉換中 (約需 5~10 秒，請耐心等候)..."):
                         pdf_data = docx_to_pdf(data_docx)
                         if pdf_data:
