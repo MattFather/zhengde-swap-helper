@@ -148,19 +148,6 @@ def set_chinese_font(doc, font_name='標楷體'):
     doc.styles['Normal'].font.name = font_name
     doc.styles['Normal']._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
 
-# 【優化3】：根據文字長度動態調整字體大小，避免換行撐爆格子
-def add_run_with_autofit(paragraph, text, default_pt=9):
-    text_len = len(text)
-    run = paragraph.add_run(text)
-    if text_len <= 4:
-        run.font.size = Pt(default_pt)
-    elif text_len <= 6:
-        run.font.size = Pt(default_pt - 1.5) # 稍微縮小
-    else:
-        run.font.size = Pt(default_pt - 2.5) # 大幅縮小
-    run.bold = True
-    return run
-
 def generate_timetable_block(container_cell, title_suffix, sch_year, sch_term, issue_unit, class_label, filtered_df, is_teacher_side=True, teacher_name=""):
     p_header = container_cell.paragraphs[0]
     p_header.paragraph_format.space_before = Pt(0)
@@ -251,17 +238,27 @@ def generate_timetable_block(container_cell, title_suffix, sch_year, sch_term, i
                 run_date_cell.font.size = Pt(9)
                 run_date_cell.bold = True
                 
-                # 第 2 行：班級與科目 (套用自動縮小機制)
+                # 第 2 行：班級與科目 (專屬縮小區)
                 p2 = cell.add_paragraph()
                 p2.paragraph_format.space_after = Pt(0)
                 subj_display = f"{c_name} {s_name}".strip() if is_teacher_side and c_name else s_name
-                add_run_with_autofit(p2, subj_display, default_pt=9)
+                run_subj = p2.add_run(subj_display)
                 
-                # 第 3 行：老師名稱 (套用自動縮小機制)
+                # 如果字數過多 (例如 716 自然探究，共8字元)，略微縮小科目字體，其餘維持
+                if len(subj_display) >= 8:
+                    run_subj.font.size = Pt(7.5)
+                elif len(subj_display) >= 6:
+                    run_subj.font.size = Pt(8)
+                else:
+                    run_subj.font.size = Pt(9)
+                run_subj.bold = True
+                
+                # 第 3 行：老師名稱 (恢復預設尺寸)
                 p3 = cell.add_paragraph()
                 p3.paragraph_format.space_after = Pt(0)
-                teacher_disp = str(row_data["老師"])
-                add_run_with_autofit(p3, teacher_disp, default_pt=9)
+                run_teacher = p3.add_run(str(row_data["老師"]))
+                run_teacher.font.size = Pt(9)
+                run_teacher.bold = True
                 
                 # 第 4 行：配對資訊
                 p4 = cell.add_paragraph()
@@ -447,6 +444,29 @@ if 'res_data' not in st.session_state:
         "調/代課": pd.Series(dtype='str')
     })
 
+# 衝堂檢查器 A：檢查原始空堂是否已經被加過
+def check_source_conflict(df, teacher, date_val, period):
+    if df.empty: return False
+    date_str = pd.to_datetime(date_val).strftime('%Y-%m-%d')
+    df_dates = pd.to_datetime(df['日期'], errors='coerce').dt.strftime('%Y-%m-%d')
+    conflict = df[(df['老師'] == teacher) & (df_dates == date_str) & (df['節次'] == period)]
+    return not conflict.empty
+
+# 衝堂檢查器 B：時空預知，檢查目標日調過去之後，自己會不會跟其他調來的課衝堂
+def check_destination_conflict(df, teacher, date_val, period):
+    if df.empty: return False
+    processed_df = process_swap_logic(df)
+    if processed_df.empty: return False
+    date_str = pd.to_datetime(date_val).strftime('%Y-%m-%d')
+    p_dates = pd.to_datetime(processed_df['日期'], errors='coerce').dt.strftime('%Y-%m-%d')
+    conflict = processed_df[
+        (processed_df['老師'] == teacher) & 
+        (p_dates == date_str) & 
+        (processed_df['節次'] == period) &
+        (processed_df['調/代課'] != '空堂X')
+    ]
+    return not conflict.empty
+
 def style_my_grid(val):
     val_str = str(val)
     if "🌟 " in val_str: return "color: #a0a0a0; background-color: #fdfdfd;" 
@@ -458,19 +478,6 @@ def style_target_grid(val):
     if "🌟[" in val_str: return "color: #0066cc; font-weight: bold; background-color: #f0f8ff;"
     elif "🔄[" in val_str: return "color: #d9534f; font-weight: bold; background-color: #fdf5f5;"
     return ""
-
-# 【優化2】：衝堂檢查函數
-def check_conflict(df, teacher, date_val, period):
-    if df.empty: return False
-    # 將兩邊的日期統一轉為字串格式來比較
-    date_str = pd.to_datetime(date_val).strftime('%Y-%m-%d')
-    df_dates = pd.to_datetime(df['日期'], errors='coerce').dt.strftime('%Y-%m-%d')
-    conflict = df[
-        (df['老師'] == teacher) & 
-        (df_dates == date_str) & 
-        (df['節次'] == period)
-    ]
-    return not conflict.empty
 
 # ================= 6. UI 版面佈局 =================
 st.title("🏫 正德調課小幫手 ＆ 列印整合系統")
@@ -605,19 +612,19 @@ with tab_visual:
                 with col_btn:
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.button("➕ 一鍵加入", type="primary", use_container_width=True):
-                        # 【優化2】：加入前先進行衝堂檢查
                         source_period_str = f"第 {st.session_state.source_period} 節"
                         target_period_str = f"第 {st.session_state.target_period} 節"
                         
-                        conflict_mine = check_conflict(st.session_state.res_data, my_name, date_mine, source_period_str)
-                        conflict_target = check_conflict(st.session_state.res_data, st.session_state.target_teacher, date_target, target_period_str)
-                        
-                        if conflict_mine:
-                            st.error(f"⚠️ 衝堂警告：您在 {date_mine} 的 {source_period_str} 已經加入過調課清單了！請更改日期。")
-                        elif conflict_target:
-                            st.error(f"⚠️ 衝堂警告：{st.session_state.target_teacher} 在 {date_target} 的 {target_period_str} 已經有排定調課！請更改日期。")
+                        # 終極防護：衝堂檢查
+                        if check_source_conflict(st.session_state.res_data, my_name, date_mine, source_period_str):
+                            st.error(f"⚠️ 衝堂警告：您在 {date_mine} 的 {source_period_str} 已經加入過清單，請勿重複加入！")
+                        elif check_source_conflict(st.session_state.res_data, st.session_state.target_teacher, date_target, target_period_str):
+                            st.error(f"⚠️ 衝堂警告：對方在 {date_target} 的 {target_period_str} 已經加入過清單！")
+                        elif check_destination_conflict(st.session_state.res_data, my_name, date_target, target_period_str):
+                            st.error(f"⚠️ 衝堂警告：您在目標日 {date_target} 的 {target_period_str} 已有排定其他課程，無法調入！")
+                        elif check_destination_conflict(st.session_state.res_data, st.session_state.target_teacher, date_mine, source_period_str):
+                            st.error(f"⚠️ 衝堂警告：對方在您的原上課日 {date_mine} 的 {source_period_str} 已有排定其他課程，無法調入！")
                         else:
-                            # 無衝堂，執行加入
                             current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
                             next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
                             
@@ -724,9 +731,9 @@ with tab_print:
 
     st.divider()
 
-    # 【優化1】：檢查發放單位是否未修改
+    # 發放單位防呆機制
     if issue_unit.strip() == "ＯＯＯ老師":
-        st.error("⚠️ 提示：請在上方修改「發放單位」(預設為ＯＯＯ老師) 後，即可解鎖列印與下載功能。")
+        st.error("⚠️ 提醒：請在上方修改「發放單位」(預設為ＯＯＯ老師) 後，即可解鎖列印與下載功能。")
     else:
         # ================= 列印與轉換輸出 =================
         data_docx = create_docx(sch_year, sch_term, issue_unit, edited_df)
