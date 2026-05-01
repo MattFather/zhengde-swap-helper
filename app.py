@@ -408,17 +408,24 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df):
     return bio.getvalue()
 
 
-# ================= 5. 系統狀態記憶與初始化 =================
-# 調課點擊暫存
+# ================= 5. 系統狀態記憶與初始化 (🚨修復核心區🚨) =================
 for key in ["last_user_name", "source_class", "source_subject", "source_period", "source_day_en", "source_day_zh", 
             "target_teacher", "target_subject", "target_period", "target_day_en", "target_day_zh", "last_clicked_cell"]:
     if key not in st.session_state: st.session_state[key] = None
 
-# 列印清單資料庫 (預設為空)
+# 【修正】明確宣告 DataFrame 內每個欄位的「資料型態 (dtype)」，防止 st.data_editor 報錯
 if 'res_data' not in st.session_state:
-    st.session_state.res_data = pd.DataFrame(columns=["勾選列印資料", "配對編號", "班級", "日期", "節次", "科目", "老師", "調/代課"])
+    st.session_state.res_data = pd.DataFrame({
+        "勾選列印資料": pd.Series(dtype='bool'),
+        "配對編號": pd.Series(dtype='str'),
+        "班級": pd.Series(dtype='str'),
+        "日期": pd.Series(dtype='datetime64[ns]'),  # 確保是日期格式
+        "節次": pd.Series(dtype='str'),
+        "科目": pd.Series(dtype='str'),
+        "老師": pd.Series(dtype='str'),
+        "調/代課": pd.Series(dtype='str')
+    })
 
-# 樣式美化函數
 def style_my_grid(val):
     val_str = str(val)
     if "🌟 " in val_str: return "color: #a0a0a0; background-color: #fdfdfd;" 
@@ -434,7 +441,6 @@ def style_target_grid(val):
 # ================= 6. UI 版面佈局 =================
 st.title("🏫 正德調課小幫手 ＆ 列印整合系統")
 
-# 使用 Tabs 將兩大功能分開，避免畫面過長
 tab_visual, tab_print = st.tabs(["🔄 第一步：視覺調課與配對", "🖨️ 第二步：列印單據與輸出"])
 
 # ----------------- Tab 1: 視覺調課與配對 -----------------
@@ -562,7 +568,6 @@ with tab_visual:
                     
                 st.dataframe(styled_target_grid, use_container_width=True, height=320)
                 
-                # 👇 新增：加入列印清單的操作區 👇
                 st.markdown("### 📥 將此配對加入列印清單")
                 col_d1, col_d2, col_btn = st.columns([2, 2, 1.5])
                 with col_d1:
@@ -570,19 +575,18 @@ with tab_visual:
                 with col_d2:
                     date_target = st.date_input(f"對方原上課日 ({st.session_state.target_day_zh})", value=get_next_weekday(st.session_state.target_day_zh))
                 with col_btn:
-                    st.markdown("<br>", unsafe_allow_html=True) # 排版對齊
+                    st.markdown("<br>", unsafe_allow_html=True)
                     if st.button("➕ 一鍵加入", type="primary", use_container_width=True):
-                        # 自動產生配對編號
                         current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
                         next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
                         
-                        # 產生兩筆資料並寫入 DataFrame
+                        # 【修正】使用 pd.to_datetime 確保加入的日期維持 datetime64 格式
                         new_rows = pd.DataFrame([
                             {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, 
-                             "日期": date_mine, "節次": f"第 {st.session_state.source_period} 節", 
+                             "日期": pd.to_datetime(date_mine), "節次": f"第 {st.session_state.source_period} 節", 
                              "科目": st.session_state.source_subject, "老師": my_name, "調/代課": "調課"},
                             {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, 
-                             "日期": date_target, "節次": f"第 {st.session_state.target_period} 節", 
+                             "日期": pd.to_datetime(date_target), "節次": f"第 {st.session_state.target_period} 節", 
                              "科目": st.session_state.target_subject, "老師": st.session_state.target_teacher, "調/代課": "調課"}
                         ])
                         st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
@@ -609,11 +613,11 @@ with tab_print:
         if 'last_uploaded_id' not in st.session_state or st.session_state.last_uploaded_id != uploaded_file.file_id:
             try:
                 df_upload = pd.read_csv(uploaded_file, keep_default_na=False, dtype=str)
+                # 【修正】上傳檔案時強制轉換為一致的資料型態
                 if "日期" in df_upload.columns:
-                    df_upload["日期"] = pd.to_datetime(df_upload["日期"], errors='coerce').dt.date
-                    df_upload["日期"] = df_upload["日期"].apply(lambda x: x if pd.notnull(x) else None)
+                    df_upload["日期"] = pd.to_datetime(df_upload["日期"], errors='coerce')
                 if "勾選列印資料" in df_upload.columns:
-                    df_upload["勾選列印資料"] = df_upload["勾選列印資料"].str.lower() != 'false'
+                    df_upload["勾選列印資料"] = df_upload["勾選列印資料"].astype(str).str.lower() == 'true'
                 for col in ["配對編號", "班級", "節次", "科目", "老師", "調/代課"]:
                     if col in df_upload.columns: df_upload[col] = df_upload[col].astype(str)
                 st.session_state.res_data = df_upload
@@ -645,7 +649,6 @@ with tab_print:
         column_order=("勾選列印資料", "配對編號", "班級", "日期", "節次", "科目", "老師", "調/代課")
     )
     
-    # 同步更新 session state，確保使用者手動修改的內容被記住
     st.session_state.res_data = edited_df
 
     c_download, _ = st.columns([2, 8])
