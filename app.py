@@ -505,7 +505,6 @@ day_map_rev = dict(zip(day_zh, day_en))
 # ================= 6. UI 版面佈局 =================
 st.title("🏫 正德調課小幫手 ＆ 列印整合系統")
 
-# 【優化 4、6】：更改分頁名稱，回歸兩大分頁
 tab_visual, tab_print = st.tabs(["🔄 第一步：選擇調課老師", "🖨️ 第二步：列印單據與輸出"])
 
 # ----------------- Tab 1: 第一步：選擇調課老師 -----------------
@@ -516,7 +515,6 @@ with tab_visual:
     st.markdown("---")
 
     if my_name:
-        # 重置狀態
         if my_name != st.session_state.last_user_name:
             for k in state_keys: st.session_state[k] = None
             st.session_state.last_user_name = my_name
@@ -599,14 +597,12 @@ with tab_visual:
                 st.subheader(f"👀 【{st.session_state.target_teacher}老師】調課後狀態")
                 target_grid = create_schedule_grid(df, st.session_state.target_teacher)
                 
-                # 對方的課表變化 (隱藏對方被拿走的課，顯示對方新接的課)
                 tr_target = st.session_state.target_period - 1
                 tc_target = day_en.index(st.session_state.target_day_en)
-                target_grid.iloc[tr_target, tc_target] = "" # 清空對方原本的課
+                target_grid.iloc[tr_target, tc_target] = "" 
                 
                 tr_source = st.session_state.source_period - 1
                 tc_source = day_en.index(st.session_state.source_day_en)
-                # 使用不可見字元 \u200b 觸發上色，讓版面乾淨一致
                 target_grid.iloc[tr_source, tc_source] = f"{st.session_state.source_class}班\n{st.session_state.target_subject}\u200b"
                 
                 try: styled_target_grid = target_grid.style.map(style_target_grid)
@@ -617,7 +613,6 @@ with tab_visual:
                 st.markdown("### 📥 將此配對加入列印清單")
                 col_d1, col_d2, col_btn = st.columns([2, 2, 1.5])
                 
-                # 【優化1】：動態綁定 key，確保點選不同老師時，日期選擇器會重新渲染正確日期
                 k_d1 = f"d1_{st.session_state.target_teacher}_{st.session_state.target_day_en}_{st.session_state.target_period}"
                 k_d2 = f"d2_{st.session_state.target_teacher}_{st.session_state.target_day_en}_{st.session_state.target_period}"
                 
@@ -630,10 +625,14 @@ with tab_visual:
                         source_period_str = f"第 {st.session_state.source_period} 節"
                         target_period_str = f"第 {st.session_state.target_period} 節"
                         
-                        if check_source_conflict(st.session_state.res_data, my_name, date_mine, source_period_str): st.error("⚠️ 衝堂：您已加入過清單！")
-                        elif check_source_conflict(st.session_state.res_data, st.session_state.target_teacher, date_target, target_period_str): st.error("⚠️ 衝堂：對方已加入過清單！")
-                        elif check_destination_conflict(st.session_state.res_data, my_name, date_target, target_period_str): st.error("⚠️ 目標衝堂：您無法調入！")
-                        elif check_destination_conflict(st.session_state.res_data, st.session_state.target_teacher, date_mine, source_period_str): st.error("⚠️ 目標衝堂：對方無法調入！")
+                        if check_source_conflict(st.session_state.res_data, my_name, date_mine, source_period_str):
+                            st.error(f"⚠️ 衝堂警告：您 ({my_name}老師) 在 {date_mine} {source_period_str} 的課已加入過清單！")
+                        elif check_source_conflict(st.session_state.res_data, st.session_state.target_teacher, date_target, target_period_str):
+                            st.error(f"⚠️ 衝堂警告：對方 ({st.session_state.target_teacher}老師) 在 {date_target} {target_period_str} 的課已加入過清單！")
+                        elif check_destination_conflict(st.session_state.res_data, my_name, date_target, target_period_str):
+                            st.error(f"⚠️ 目標衝堂：您 ({my_name}老師) 在 {date_target} {target_period_str} 已有排定課程，無法調入！")
+                        elif check_destination_conflict(st.session_state.res_data, st.session_state.target_teacher, date_mine, source_period_str):
+                            st.error(f"⚠️ 目標衝堂：對方 ({st.session_state.target_teacher}老師) 在 {date_mine} {source_period_str} 已有排定課程，無法調入！")
                         else:
                             current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
                             next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
@@ -647,7 +646,6 @@ with tab_visual:
             elif st.session_state.source_class: st.info("👈 請在左側點擊一個帶有 **🌟** 標記的格子選擇老師。")
             else: st.info("👈 準備好了嗎？請先在左側課表點選一堂您想調走的課。")
             
-        # ================== 【優化5】：進階三角調 放置於第一步下方 ==================
         st.markdown("<br><hr><br>", unsafe_allow_html=True)
         st.header("🔺 進階三角調")
         st.info("💡 **當您想去的時段無法與對方直接互換時**：請在下方選定您想去的目標空堂，系統將自動尋找可行的第三方橋樑。")
@@ -738,19 +736,17 @@ with tab_visual:
                     grid_b = create_schedule_grid(df, teacher_b_name)
                     grid_c = create_schedule_grid(df, teacher_c_name)
                     
-                    # B 老師的課表變化
                     r_b_gives = tri['Period_B'] - 1
                     c_b_gives = day_en.index(tri['Day_B'])
-                    grid_b.iloc[r_b_gives, c_b_gives] = "" # 清空 B 原本的課
+                    grid_b.iloc[r_b_gives, c_b_gives] = "" 
                     
                     r_b_takes = tri['Period_C'] - 1
                     c_b_takes = day_en.index(tri['Day_C'])
                     grid_b.iloc[r_b_takes, c_b_takes] = f"{st.session_state.tri_source_class}班\n{tri['Subject_B']}\u200b"
                     
-                    # C 老師的課表變化
                     r_c_gives = tri['Period_C'] - 1
                     c_c_gives = day_en.index(tri['Day_C'])
-                    grid_c.iloc[r_c_gives, c_c_gives] = "" # 清空 C 原本的課
+                    grid_c.iloc[r_c_gives, c_c_gives] = "" 
                     
                     r_c_takes = st.session_state.tri_source_period - 1
                     c_c_takes = day_en.index(st.session_state.tri_source_day_en)
@@ -763,7 +759,6 @@ with tab_visual:
                         style_b = grid_b.style.applymap(style_target_grid)
                         style_c = grid_c.style.applymap(style_target_grid)
 
-                    # 【優化2 & 3】：上下排列課表，並修正文字
                     st.markdown(f"**👀 {teacher_b_name} 老師的課表變化**")
                     st.dataframe(style_b, use_container_width=True, height=320)
                     
@@ -773,7 +768,6 @@ with tab_visual:
                     col_dt1, col_dt2, col_dt3, col_dbtn = st.columns([1, 1, 1, 1.2])
                     day_c_zh = [k for k, v in day_map_rev.items() if v == tri['Day_C']][0]
                     
-                    # 動態 Key
                     k_t_prefix = f"tri_{st.session_state.tri_target_day_en}_{st.session_state.tri_target_period}_{teacher_c_name}"
                     
                     with col_dt1: d_mine = st.date_input("您的原上課日", value=get_next_weekday(st.session_state.tri_source_day_zh), key=f"{k_t_prefix}_1")
@@ -787,14 +781,19 @@ with tab_visual:
                             p_b_str = f"第 {tri['Period_B']} 節"
                             p_c_str = f"第 {tri['Period_C']} 節"
                             
-                            if check_source_conflict(st.session_state.res_data, my_name, d_mine, p_mine_str) or \
-                               check_source_conflict(st.session_state.res_data, teacher_b_name, d_b, p_b_str) or \
-                               check_source_conflict(st.session_state.res_data, teacher_c_name, d_c, p_c_str):
-                                st.error("⚠️ 衝堂：有老師的時段已加入過清單！")
-                            elif check_destination_conflict(st.session_state.res_data, my_name, d_b, p_b_str) or \
-                                 check_destination_conflict(st.session_state.res_data, teacher_b_name, d_c, p_c_str) or \
-                                 check_destination_conflict(st.session_state.res_data, teacher_c_name, d_mine, p_mine_str):
-                                st.error("⚠️ 目標衝堂：調入後會發生衝堂！")
+                            # 獨立的三角調課衝堂提醒，清楚標示是哪一位老師出問題
+                            if check_source_conflict(st.session_state.res_data, my_name, d_mine, p_mine_str):
+                                st.error(f"⚠️ 衝堂警告：您 ({my_name}老師) 在 {d_mine} {p_mine_str} 的課已加入過清單！")
+                            elif check_source_conflict(st.session_state.res_data, teacher_b_name, d_b, p_b_str):
+                                st.error(f"⚠️ 衝堂警告：{teacher_b_name}老師 在 {d_b} {p_b_str} 的課已加入過清單！")
+                            elif check_source_conflict(st.session_state.res_data, teacher_c_name, d_c, p_c_str):
+                                st.error(f"⚠️ 衝堂警告：{teacher_c_name}老師 在 {d_c} {p_c_str} 的課已加入過清單！")
+                            elif check_destination_conflict(st.session_state.res_data, my_name, d_b, p_b_str):
+                                st.error(f"⚠️ 目標衝堂：您 ({my_name}老師) 在 {d_b} {p_b_str} 已有排定課程，無法調入！")
+                            elif check_destination_conflict(st.session_state.res_data, teacher_b_name, d_c, p_c_str):
+                                st.error(f"⚠️ 目標衝堂：{teacher_b_name}老師 在 {d_c} {p_c_str} 已有排定課程，無法調入！")
+                            elif check_destination_conflict(st.session_state.res_data, teacher_c_name, d_mine, p_mine_str):
+                                st.error(f"⚠️ 目標衝堂：{teacher_c_name}老師 在 {d_mine} {p_mine_str} 已有排定課程，無法調入！")
                             else:
                                 current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
                                 next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
@@ -899,7 +898,7 @@ with tab_print:
                 st.download_button(label="📥 下載 Word 檔 (可編輯)", data=data_docx, file_name=f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
                 
             with col_pdf:
-                if st.button("📥 下載 PDF (手機建議)", use_container_width=True, type="primary"):
+                if st.button("📥 轉換並下載 PDF (手機建議)", use_container_width=True, type="primary"):
                     with st.spinner("🚀 伺服器正在努力轉換中 (約需 5~10 秒，請耐心等候)..."):
                         pdf_data = docx_to_pdf(data_docx)
                         if pdf_data:
