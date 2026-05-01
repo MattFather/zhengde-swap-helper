@@ -48,6 +48,12 @@ components.html(
 def load_data():
     return pd.read_csv("schedule.csv")
 
+try:
+    df = load_data()
+except FileNotFoundError:
+    st.error("找不到 schedule.csv 檔案。")
+    st.stop()
+
 # ================= 3. 調課核心演算法 =================
 def find_swap_options(df, my_name, target_class, my_day, my_period):
     class_schedule = df[df['Class'] == target_class]
@@ -412,7 +418,6 @@ for key in ["last_user_name", "source_class", "source_subject", "source_period",
             "target_teacher", "target_subject", "target_period", "target_day_en", "target_day_zh", "last_clicked_cell"]:
     if key not in st.session_state: st.session_state[key] = None
 
-# 【修正點】賦予明確的嚴格型態，不讓 Pandas 自動推論 (dtype='str' 可以容忍所有文字)
 if 'res_data' not in st.session_state:
     st.session_state.res_data = pd.DataFrame({
         "勾選列印資料": pd.Series(dtype='bool'),
@@ -440,16 +445,11 @@ def style_target_grid(val):
 # ================= 6. UI 版面佈局 =================
 st.title("🏫 正德調課小幫手 ＆ 列印整合系統")
 
-tab_visual, tab_print = st.tabs(["🔄 第一步：視覺調課與配對", "🖨️ 第二步：列印單據與輸出"])
+# 【優化3】：更改第一頁的頁籤名稱
+tab_visual, tab_print = st.tabs(["🔄 第一步：選擇調課老師", "🖨️ 第二步：列印單據與輸出"])
 
-# ----------------- Tab 1: 視覺調課與配對 -----------------
+# ----------------- Tab 1: 第一步：選擇調課老師 -----------------
 with tab_visual:
-    try:
-        df = load_data()
-    except FileNotFoundError:
-        st.error("找不到 schedule.csv 檔案。")
-        st.stop()
-
     all_teachers = sorted(df['Teacher'].dropna().unique())
     my_name = st.selectbox("🙋‍♂️ 請輸入您的名字：", all_teachers, index=None, placeholder="請選擇您的名字...")
     
@@ -579,17 +579,17 @@ with tab_visual:
                         current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
                         next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
                         
-                        # 新資料必須嚴格符合宣告型態
+                        # 加入時確保科目去除多餘空格，讓後方完美比對
                         new_rows = pd.DataFrame([
                             {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, 
                              "日期": pd.to_datetime(date_mine), "節次": f"第 {st.session_state.source_period} 節", 
-                             "科目": st.session_state.source_subject, "老師": my_name, "調/代課": "調課"},
+                             "科目": str(st.session_state.source_subject).strip(), "老師": my_name, "調/代課": "調課"},
                             {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, 
                              "日期": pd.to_datetime(date_target), "節次": f"第 {st.session_state.target_period} 節", 
-                             "科目": st.session_state.target_subject, "老師": st.session_state.target_teacher, "調/代課": "調課"}
+                             "科目": str(st.session_state.target_subject).strip(), "老師": st.session_state.target_teacher, "調/代課": "調課"}
                         ])
                         st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
-                        st.success("✅ 已成功加入！請至上方「🖨️ 列印單據管理」查看。")
+                        st.success("✅ 已成功加入！請至上方「🖨️ 列印單據與輸出」查看。")
                         
             elif st.session_state.source_class:
                 st.info("👈 請在左側點擊一個帶有 **🌟** 標記的格子選擇老師。")
@@ -604,7 +604,9 @@ with tab_print:
     c1, c2, c3 = st.columns(3)
     with c1: sch_year = st.text_input("學年度", value="114")
     with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
-    with c3: issue_unit = st.text_input("發放單位", value="教務處")
+    
+    # 【優化2】：發放單位預設改為 ＯＯＯ老師
+    with c3: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
 
     st.markdown("#### 🔒 本機資料恢復 (選填)")
     uploaded_file = st.file_uploader("📂 若有先前下載的暫存檔 (.csv)，請在此上傳恢復：", type=["csv"])
@@ -612,29 +614,35 @@ with tab_print:
         if 'last_uploaded_id' not in st.session_state or st.session_state.last_uploaded_id != uploaded_file.file_id:
             try:
                 df_upload = pd.read_csv(uploaded_file, keep_default_na=False, dtype=str)
+                if "日期" in df_upload.columns:
+                    df_upload["日期"] = pd.to_datetime(df_upload["日期"], errors='coerce').dt.date
+                if "勾選列印資料" in df_upload.columns:
+                    df_upload["勾選列印資料"] = df_upload["勾選列印資料"].astype(str).str.lower() == 'true'
+                for col in ["配對編號", "班級", "節次", "科目", "老師", "調/代課"]:
+                    if col in df_upload.columns: df_upload[col] = df_upload[col].astype(str)
                 st.session_state.res_data = df_upload
                 st.session_state.last_uploaded_id = uploaded_file.file_id
                 st.rerun() 
             except Exception as e:
                 st.error(f"❌ 檔案讀取失敗: {e}")
 
-    subject_list = ["", "國文", "英文", "數學", "生物", "理化", "地科", "地理", "歷史", "公民", 
-                    "體育", "健康", "視藝", "表藝", "音樂", "家政", "童軍", "輔導", "資訊", "生科", "本土語"]
+    # 【優化1】：動態生成科目選單，完美囊括 schedule.csv 中的所有特殊科目
+    df_subs = df['Subject'].dropna().astype(str).str.strip().unique().tolist()
+    base_subs = ["", "國文", "英文", "數學", "生物", "理化", "地科", "地理", "歷史", "公民", 
+                 "體育", "健康", "視藝", "表藝", "音樂", "家政", "童軍", "輔導", "資訊", "生科", "本土語"]
+    # 組合並移除重複項，保持原有順序
+    subject_list = list(dict.fromkeys(base_subs + df_subs))
 
     st.markdown("#### 📝 待列印清單編輯區")
     st.info("這裡的資料就是從第一頁「一鍵加入」傳送過來的！您可以自由修改日期或增刪資料，確認無誤後再點擊下方列印。")
     
-    # 🚨 終極護城河：防禦型態崩潰機制 🚨
-    # 在進入 Streamlit 表格前，無條件強制將所有欄位轉回標準格式
     if not st.session_state.res_data.empty:
         st.session_state.res_data["日期"] = pd.to_datetime(st.session_state.res_data["日期"], errors='coerce')
         st.session_state.res_data["勾選列印資料"] = st.session_state.res_data["勾選列印資料"].astype(bool)
         for col in ["配對編號", "班級", "節次", "科目", "老師", "調/代課"]:
-            # 填補空值並確保純字串，避免出現 "nan" 擾亂視聽
             st.session_state.res_data[col] = st.session_state.res_data[col].fillna("").astype(str)
             st.session_state.res_data.loc[st.session_state.res_data[col] == "nan", col] = ""
     else:
-        # 若為空，強制產生具有嚴格 dtype 定義的空表
         st.session_state.res_data = pd.DataFrame({
             "勾選列印資料": pd.Series(dtype='bool'),
             "配對編號": pd.Series(dtype='str'),
@@ -646,7 +654,6 @@ with tab_print:
             "調/代課": pd.Series(dtype='str')
         })
 
-    # 此時送入的資料已 100% 完美，絕對不會報錯
     edited_df = st.data_editor(
         st.session_state.res_data,
         column_config={
@@ -670,8 +677,9 @@ with tab_print:
     c_download, _ = st.columns([2, 8])
     with c_download:
         csv_bytes = edited_df.to_csv(index=False).encode('utf-8-sig')
+        # 【優化4】：修改按鈕文字為「暫存目前進度」
         st.download_button(
-            label="💾 下載目前進度",
+            label="💾 暫存目前進度",
             data=csv_bytes,
             file_name=f"調代課暫存_{datetime.date.today().strftime('%Y%m%d')}.csv",
             mime="text/csv",
