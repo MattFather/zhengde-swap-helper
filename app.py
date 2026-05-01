@@ -148,6 +148,19 @@ def set_chinese_font(doc, font_name='標楷體'):
     doc.styles['Normal'].font.name = font_name
     doc.styles['Normal']._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
 
+# 【優化3】：根據文字長度動態調整字體大小，避免換行撐爆格子
+def add_run_with_autofit(paragraph, text, default_pt=9):
+    text_len = len(text)
+    run = paragraph.add_run(text)
+    if text_len <= 4:
+        run.font.size = Pt(default_pt)
+    elif text_len <= 6:
+        run.font.size = Pt(default_pt - 1.5) # 稍微縮小
+    else:
+        run.font.size = Pt(default_pt - 2.5) # 大幅縮小
+    run.bold = True
+    return run
+
 def generate_timetable_block(container_cell, title_suffix, sch_year, sch_term, issue_unit, class_label, filtered_df, is_teacher_side=True, teacher_name=""):
     p_header = container_cell.paragraphs[0]
     p_header.paragraph_format.space_before = Pt(0)
@@ -232,24 +245,25 @@ def generate_timetable_block(container_cell, title_suffix, sch_year, sch_term, i
                 c_name = str(row_data["班級"]).strip() if pd.notnull(row_data["班級"]) and row_data["班級"] != "" else ""
                 s_name = str(row_data["科目"]).strip() if pd.notnull(row_data["科目"]) and row_data["科目"] != "" else ""
                 
+                # 第 1 行：日期
                 p1.paragraph_format.space_after = Pt(0)
                 run_date_cell = p1.add_run(pd.to_datetime(row_data["日期"]).strftime("%m/%d"))
                 run_date_cell.font.size = Pt(9)
                 run_date_cell.bold = True
                 
+                # 第 2 行：班級與科目 (套用自動縮小機制)
                 p2 = cell.add_paragraph()
                 p2.paragraph_format.space_after = Pt(0)
                 subj_display = f"{c_name} {s_name}".strip() if is_teacher_side and c_name else s_name
-                run_subj = p2.add_run(subj_display)
-                run_subj.font.size = Pt(9)
-                run_subj.bold = True
+                add_run_with_autofit(p2, subj_display, default_pt=9)
                 
+                # 第 3 行：老師名稱 (套用自動縮小機制)
                 p3 = cell.add_paragraph()
                 p3.paragraph_format.space_after = Pt(0)
-                run_teacher = p3.add_run(str(row_data["老師"]))
-                run_teacher.font.size = Pt(9)
-                run_teacher.bold = True
+                teacher_disp = str(row_data["老師"])
+                add_run_with_autofit(p3, teacher_disp, default_pt=9)
                 
+                # 第 4 行：配對資訊
                 p4 = cell.add_paragraph()
                 p4.paragraph_format.space_after = Pt(0)
                 pair_id = str(row_data.get("配對編號", "")).strip()
@@ -291,7 +305,10 @@ def generate_timetable_block(container_cell, title_suffix, sch_year, sch_term, i
             curr_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
             for para in curr_cell.paragraphs:
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                para.paragraph_format.line_spacing = 1.0
+                # 強制緊縮行距，避免被撐開
+                para.paragraph_format.line_spacing = Pt(10)
+                para.paragraph_format.space_before = Pt(0)
+                para.paragraph_format.space_after = Pt(0)
             if r == 4: set_cell_border(curr_cell, bottom={"sz": 24, "val": "single", "color": "000000"})
             if r == 5: set_cell_border(curr_cell, top={"sz": 24, "val": "single", "color": "000000"})
 
@@ -442,10 +459,22 @@ def style_target_grid(val):
     elif "🔄[" in val_str: return "color: #d9534f; font-weight: bold; background-color: #fdf5f5;"
     return ""
 
+# 【優化2】：衝堂檢查函數
+def check_conflict(df, teacher, date_val, period):
+    if df.empty: return False
+    # 將兩邊的日期統一轉為字串格式來比較
+    date_str = pd.to_datetime(date_val).strftime('%Y-%m-%d')
+    df_dates = pd.to_datetime(df['日期'], errors='coerce').dt.strftime('%Y-%m-%d')
+    conflict = df[
+        (df['老師'] == teacher) & 
+        (df_dates == date_str) & 
+        (df['節次'] == period)
+    ]
+    return not conflict.empty
+
 # ================= 6. UI 版面佈局 =================
 st.title("🏫 正德調課小幫手 ＆ 列印整合系統")
 
-# 【優化3】：更改第一頁的頁籤名稱
 tab_visual, tab_print = st.tabs(["🔄 第一步：選擇調課老師", "🖨️ 第二步：列印單據與輸出"])
 
 # ----------------- Tab 1: 第一步：選擇調課老師 -----------------
@@ -576,20 +605,32 @@ with tab_visual:
                 with col_btn:
                     st.markdown("<br>", unsafe_allow_html=True)
                     if st.button("➕ 一鍵加入", type="primary", use_container_width=True):
-                        current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
-                        next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
+                        # 【優化2】：加入前先進行衝堂檢查
+                        source_period_str = f"第 {st.session_state.source_period} 節"
+                        target_period_str = f"第 {st.session_state.target_period} 節"
                         
-                        # 加入時確保科目去除多餘空格，讓後方完美比對
-                        new_rows = pd.DataFrame([
-                            {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, 
-                             "日期": pd.to_datetime(date_mine), "節次": f"第 {st.session_state.source_period} 節", 
-                             "科目": str(st.session_state.source_subject).strip(), "老師": my_name, "調/代課": "調課"},
-                            {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, 
-                             "日期": pd.to_datetime(date_target), "節次": f"第 {st.session_state.target_period} 節", 
-                             "科目": str(st.session_state.target_subject).strip(), "老師": st.session_state.target_teacher, "調/代課": "調課"}
-                        ])
-                        st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
-                        st.success("✅ 已成功加入！請至上方「🖨️ 列印單據與輸出」查看。")
+                        conflict_mine = check_conflict(st.session_state.res_data, my_name, date_mine, source_period_str)
+                        conflict_target = check_conflict(st.session_state.res_data, st.session_state.target_teacher, date_target, target_period_str)
+                        
+                        if conflict_mine:
+                            st.error(f"⚠️ 衝堂警告：您在 {date_mine} 的 {source_period_str} 已經加入過調課清單了！請更改日期。")
+                        elif conflict_target:
+                            st.error(f"⚠️ 衝堂警告：{st.session_state.target_teacher} 在 {date_target} 的 {target_period_str} 已經有排定調課！請更改日期。")
+                        else:
+                            # 無衝堂，執行加入
+                            current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
+                            next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
+                            
+                            new_rows = pd.DataFrame([
+                                {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, 
+                                 "日期": pd.to_datetime(date_mine), "節次": source_period_str, 
+                                 "科目": str(st.session_state.source_subject).strip(), "老師": my_name, "調/代課": "調課"},
+                                {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, 
+                                 "日期": pd.to_datetime(date_target), "節次": target_period_str, 
+                                 "科目": str(st.session_state.target_subject).strip(), "老師": st.session_state.target_teacher, "調/代課": "調課"}
+                            ])
+                            st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
+                            st.success("✅ 已成功加入！請至上方「🖨️ 第二步：列印單據與輸出」查看。")
                         
             elif st.session_state.source_class:
                 st.info("👈 請在左側點擊一個帶有 **🌟** 標記的格子選擇老師。")
@@ -604,8 +645,6 @@ with tab_print:
     c1, c2, c3 = st.columns(3)
     with c1: sch_year = st.text_input("學年度", value="114")
     with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
-    
-    # 【優化2】：發放單位預設改為 ＯＯＯ老師
     with c3: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
 
     st.markdown("#### 🔒 本機資料恢復 (選填)")
@@ -626,11 +665,9 @@ with tab_print:
             except Exception as e:
                 st.error(f"❌ 檔案讀取失敗: {e}")
 
-    # 【優化1】：動態生成科目選單，完美囊括 schedule.csv 中的所有特殊科目
     df_subs = df['Subject'].dropna().astype(str).str.strip().unique().tolist()
     base_subs = ["", "國文", "英文", "數學", "生物", "理化", "地科", "地理", "歷史", "公民", 
                  "體育", "健康", "視藝", "表藝", "音樂", "家政", "童軍", "輔導", "資訊", "生科", "本土語"]
-    # 組合並移除重複項，保持原有順序
     subject_list = list(dict.fromkeys(base_subs + df_subs))
 
     st.markdown("#### 📝 待列印清單編輯區")
@@ -677,7 +714,6 @@ with tab_print:
     c_download, _ = st.columns([2, 8])
     with c_download:
         csv_bytes = edited_df.to_csv(index=False).encode('utf-8-sig')
-        # 【優化4】：修改按鈕文字為「暫存目前進度」
         st.download_button(
             label="💾 暫存目前進度",
             data=csv_bytes,
@@ -688,52 +724,56 @@ with tab_print:
 
     st.divider()
 
-    # ================= 列印與轉換輸出 =================
-    data_docx = create_docx(sch_year, sch_term, issue_unit, edited_df)
+    # 【優化1】：檢查發放單位是否未修改
+    if issue_unit.strip() == "ＯＯＯ老師":
+        st.error("⚠️ 提示：請在上方修改「發放單位」(預設為ＯＯＯ老師) 後，即可解鎖列印與下載功能。")
+    else:
+        # ================= 列印與轉換輸出 =================
+        data_docx = create_docx(sch_year, sch_term, issue_unit, edited_df)
 
-    if data_docx:
-        col_word, col_pdf = st.columns(2)
-        with col_word:
-            st.markdown("#### 🔹 選項一：下載Word檔 (可編輯)")
-            st.download_button(
-                label="📥 下載 Word 檔",
-                data=data_docx,
-                file_name=f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.docx",
-                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                use_container_width=True
-            )
-            
-        with col_pdf:
-            st.markdown("#### 🔹 選項二：下載PDF (手機建議)")
-            if st.button("🔄 轉換並自動下載 PDF", use_container_width=True, type="primary"):
-                with st.spinner("🚀 伺服器正在努力轉換中 (約需 5~10 秒，請耐心等候)..."):
-                    pdf_data = docx_to_pdf(data_docx)
-                    if pdf_data:
-                        st.success("✅ 轉換成功！檔案已自動下載。若無反應請點下方按鈕：")
-                        b64_pdf = base64.b64encode(pdf_data).decode('utf-8')
-                        pdf_filename = f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.pdf"
-                        
-                        auto_download_js = f"""
-                            <script>
-                                setTimeout(function() {{
-                                    const parentDoc = window.parent.document;
-                                    const link = parentDoc.createElement('a');
-                                    link.href = 'data:application/octet-stream;base64,{b64_pdf}';
-                                    link.download = '{pdf_filename}';
-                                    parentDoc.body.appendChild(link);
-                                    link.click();
-                                    parentDoc.body.removeChild(link);
-                                }}, 300);
-                            </script>
-                        """
-                        components.html(auto_download_js, height=0, width=0)
-                        
-                        st.download_button(
-                            label="📥 點我手動下載 PDF 檔",
-                            data=pdf_data,
-                            file_name=pdf_filename,
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-                    else:
-                        st.error("❌ 轉換失敗，伺服器過度繁忙或缺少套件。")
+        if data_docx:
+            col_word, col_pdf = st.columns(2)
+            with col_word:
+                st.markdown("#### 🔹 選項一：下載Word檔 (可編輯)")
+                st.download_button(
+                    label="📥 下載 Word 檔",
+                    data=data_docx,
+                    file_name=f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    use_container_width=True
+                )
+                
+            with col_pdf:
+                st.markdown("#### 🔹 選項二：下載PDF (手機建議)")
+                if st.button("🔄 轉換並自動下載 PDF", use_container_width=True, type="primary"):
+                    with st.spinner("🚀 伺服器正在努力轉換中 (約需 5~10 秒，請耐心等候)..."):
+                        pdf_data = docx_to_pdf(data_docx)
+                        if pdf_data:
+                            st.success("✅ 轉換成功！檔案已自動下載。若無反應請點下方按鈕：")
+                            b64_pdf = base64.b64encode(pdf_data).decode('utf-8')
+                            pdf_filename = f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.pdf"
+                            
+                            auto_download_js = f"""
+                                <script>
+                                    setTimeout(function() {{
+                                        const parentDoc = window.parent.document;
+                                        const link = parentDoc.createElement('a');
+                                        link.href = 'data:application/octet-stream;base64,{b64_pdf}';
+                                        link.download = '{pdf_filename}';
+                                        parentDoc.body.appendChild(link);
+                                        link.click();
+                                        parentDoc.body.removeChild(link);
+                                    }}, 300);
+                                </script>
+                            """
+                            components.html(auto_download_js, height=0, width=0)
+                            
+                            st.download_button(
+                                label="📥 點我手動下載 PDF 檔",
+                                data=pdf_data,
+                                file_name=pdf_filename,
+                                mime="application/pdf",
+                                use_container_width=True
+                            )
+                        else:
+                            st.error("❌ 轉換失敗，伺服器過度繁忙或缺少套件。")
