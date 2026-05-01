@@ -242,24 +242,22 @@ def generate_timetable_block(container_cell, title_suffix, sch_year, sch_term, i
                 p2 = cell.add_paragraph()
                 p2.paragraph_format.space_after = Pt(0)
                 
-                # 【優化2】：班級與科目分開處理，班級永遠維持 9pt
                 if is_teacher_side and c_name:
                     run_c = p2.add_run(f"{c_name} ")
                     run_c.font.size = Pt(9)
                     run_c.bold = True
                 
-                # 單獨為科目設定大小
                 if s_name:
                     run_s = p2.add_run(s_name)
                     run_s.bold = True
                     if len(s_name) > 4:
-                        run_s.font.size = Pt(7.5) # 超過4個字 (例如5個字以上)
+                        run_s.font.size = Pt(7.5) 
                     elif len(s_name) == 4:
-                        run_s.font.size = Pt(8.0) # 剛好4個字 (例如 自然探究)
+                        run_s.font.size = Pt(8.0) 
                     else:
-                        run_s.font.size = Pt(9.0) # 3個字以內 (例如 國文)
+                        run_s.font.size = Pt(9.0) 
                 
-                # 第 3 行：老師名稱 (恢復預設 9pt)
+                # 第 3 行：老師名稱
                 p3 = cell.add_paragraph()
                 p3.paragraph_format.space_after = Pt(0)
                 run_teacher = p3.add_run(str(row_data["老師"]))
@@ -308,7 +306,6 @@ def generate_timetable_block(container_cell, title_suffix, sch_year, sch_term, i
             curr_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
             for para in curr_cell.paragraphs:
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                # 【優化1】：恢復最原始美觀的 1.0 行距
                 para.paragraph_format.line_spacing = 1.0
                 para.paragraph_format.space_before = Pt(0)
                 para.paragraph_format.space_after = Pt(0)
@@ -657,31 +654,13 @@ with tab_print:
     with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
     with c3: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
 
-    st.markdown("#### 🔒 本機資料恢復 (選填)")
-    uploaded_file = st.file_uploader("📂 若有先前下載的暫存檔 (.csv)，請在此上傳恢復：", type=["csv"])
-    if uploaded_file is not None:
-        if 'last_uploaded_id' not in st.session_state or st.session_state.last_uploaded_id != uploaded_file.file_id:
-            try:
-                df_upload = pd.read_csv(uploaded_file, keep_default_na=False, dtype=str)
-                if "日期" in df_upload.columns:
-                    df_upload["日期"] = pd.to_datetime(df_upload["日期"], errors='coerce').dt.date
-                if "勾選列印資料" in df_upload.columns:
-                    df_upload["勾選列印資料"] = df_upload["勾選列印資料"].astype(str).str.lower() == 'true'
-                for col in ["配對編號", "班級", "節次", "科目", "老師", "調/代課"]:
-                    if col in df_upload.columns: df_upload[col] = df_upload[col].astype(str)
-                st.session_state.res_data = df_upload
-                st.session_state.last_uploaded_id = uploaded_file.file_id
-                st.rerun() 
-            except Exception as e:
-                st.error(f"❌ 檔案讀取失敗: {e}")
-
     df_subs = df['Subject'].dropna().astype(str).str.strip().unique().tolist()
     base_subs = ["", "國文", "英文", "數學", "生物", "理化", "地科", "地理", "歷史", "公民", 
                  "體育", "健康", "視藝", "表藝", "音樂", "家政", "童軍", "輔導", "資訊", "生科", "本土語"]
     subject_list = list(dict.fromkeys(base_subs + df_subs))
 
+    # 【優化4】：將編輯區移到最上方
     st.markdown("#### 📝 待列印清單編輯區")
-    st.info("這裡的資料就是從第一頁「一鍵加入」傳送過來的！您可以自由修改日期或增刪資料，確認無誤後再點擊下方列印。")
     
     if not st.session_state.res_data.empty:
         st.session_state.res_data["日期"] = pd.to_datetime(st.session_state.res_data["日期"], errors='coerce')
@@ -725,7 +704,7 @@ with tab_print:
     with c_download:
         csv_bytes = edited_df.to_csv(index=False).encode('utf-8-sig')
         st.download_button(
-            label="💾 暫存目前進度",
+            label="💾 下載暫存檔",
             data=csv_bytes,
             file_name=f"調代課暫存_{datetime.date.today().strftime('%Y%m%d')}.csv",
             mime="text/csv",
@@ -734,18 +713,39 @@ with tab_print:
 
     st.divider()
 
+    # 將本機資料恢復移到編輯區與按鈕區之間
+    st.markdown("#### 🔒 本機資料恢復 (選填)")
+    uploaded_file = st.file_uploader("📂 若有先前下載的暫存檔 (.csv)，請在此上傳恢復：", type=["csv"])
+    if uploaded_file is not None:
+        if 'last_uploaded_id' not in st.session_state or st.session_state.last_uploaded_id != uploaded_file.file_id:
+            try:
+                df_upload = pd.read_csv(uploaded_file, keep_default_na=False, dtype=str)
+                if "日期" in df_upload.columns:
+                    df_upload["日期"] = pd.to_datetime(df_upload["日期"], errors='coerce').dt.date
+                if "勾選列印資料" in df_upload.columns:
+                    df_upload["勾選列印資料"] = df_upload["勾選列印資料"].astype(str).str.lower() == 'true'
+                for col in ["配對編號", "班級", "節次", "科目", "老師", "調/代課"]:
+                    if col in df_upload.columns: df_upload[col] = df_upload[col].astype(str)
+                st.session_state.res_data = df_upload
+                st.session_state.last_uploaded_id = uploaded_file.file_id
+                st.rerun() 
+            except Exception as e:
+                st.error(f"❌ 檔案讀取失敗: {e}")
+
+    st.divider()
+
     if issue_unit.strip() == "ＯＯＯ老師":
-        st.error("⚠️ 提醒：請在上方修改「發放單位」(預設為ＯＯＯ老師) 後，即可解鎖列印與下載功能。")
+        st.error("⚠️ 提醒：請在最上方修改「發放單位」(預設為ＯＯＯ老師) 後，即可解鎖列印與下載功能。")
     else:
         # ================= 列印與轉換輸出 =================
         data_docx = create_docx(sch_year, sch_term, issue_unit, edited_df)
 
         if data_docx:
-            col_word, col_pdf = st.columns(2)
+            col_word, col_pdf = st.columns([1, 1])
             with col_word:
-                st.markdown("#### 🔹 選項一：下載Word檔 (可編輯)")
+                # 【優化1】：將說明文字直接整合進按鈕
                 st.download_button(
-                    label="📥 下載 Word 檔",
+                    label="📥 下載 Word 檔 (可編輯)",
                     data=data_docx,
                     file_name=f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.docx",
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -753,12 +753,12 @@ with tab_print:
                 )
                 
             with col_pdf:
-                st.markdown("#### 🔹 選項二：下載PDF (手機建議)")
-                if st.button("🔄 轉換並自動下載 PDF", use_container_width=True, type="primary"):
+                # 【優化1】：將說明文字直接整合進按鈕，並保持按鈕顯眼
+                if st.button("📥 轉換並下載 PDF (手機建議)", use_container_width=True, type="primary"):
                     with st.spinner("🚀 伺服器正在努力轉換中 (約需 5~10 秒，請耐心等候)..."):
                         pdf_data = docx_to_pdf(data_docx)
                         if pdf_data:
-                            st.success("✅ 轉換成功！檔案已自動下載。若無反應請點下方按鈕：")
+                            st.success("✅ 轉換成功！檔案已自動下載。")
                             b64_pdf = base64.b64encode(pdf_data).decode('utf-8')
                             pdf_filename = f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.pdf"
                             
@@ -777,8 +777,9 @@ with tab_print:
                             """
                             components.html(auto_download_js, height=0, width=0)
                             
+                            # 備用按鈕如果沒跳出視窗
                             st.download_button(
-                                label="📥 點我手動下載 PDF 檔",
+                                label="備用：若未自動下載請點此",
                                 data=pdf_data,
                                 file_name=pdf_filename,
                                 mime="application/pdf",
