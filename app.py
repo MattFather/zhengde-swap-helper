@@ -486,11 +486,10 @@ def check_destination_conflict(df, teacher, date_val, period):
     ]
     return not conflict.empty
 
-# 【極簡優化】: 使用不可見字元 \u200b 來觸發上色，讓畫面保持完全乾淨一致
 def style_my_grid(val):
     val_str = str(val)
-    if "🌟 " in val_str: return "color: #a0a0a0; background-color: #fdfdfd;" 
-    elif "🔺[" in val_str: return "color: #cc6600; background-color: #fff3e6;" 
+    if "🌟" in val_str: return "color: #0066cc; background-color: #f0f8ff;" 
+    elif "🔺" in val_str: return "color: #cc6600; background-color: #fff3e6;" 
     elif "🔄[欲調走]" in val_str: return "color: #d9534f; font-weight: bold; background-color: #fdf5f5;"
     return ""
 
@@ -506,21 +505,21 @@ day_map_rev = dict(zip(day_zh, day_en))
 # ================= 6. UI 版面佈局 =================
 st.title("🏫 正德調課小幫手 ＆ 列印整合系統")
 
-tab_visual, tab_triangle, tab_print = st.tabs(["🔄 第一步：一般雙人互調", "🔺 第二步：進階三角調課", "🖨️ 第三步：列印單據與輸出"])
+# 【優化 4、6】：更改分頁名稱，回歸兩大分頁
+tab_visual, tab_print = st.tabs(["🔄 第一步：選擇調課老師", "🖨️ 第二步：列印單據與輸出"])
 
-# ----------------- Tab 1: 第一步：一般雙人互調 -----------------
+# ----------------- Tab 1: 第一步：選擇調課老師 -----------------
 with tab_visual:
     all_teachers = sorted(df['Teacher'].dropna().unique())
-    my_name = st.selectbox("🙋‍♂️ 請輸入您的名字 (雙人互調)：", all_teachers, index=None, placeholder="請選擇您的名字...", key="name_tab1")
+    my_name = st.selectbox("🙋‍♂️ 請輸入您的名字：", all_teachers, index=None, placeholder="請選擇您的名字...")
     
     st.markdown("---")
 
     if my_name:
+        # 重置狀態
         if my_name != st.session_state.last_user_name:
+            for k in state_keys: st.session_state[k] = None
             st.session_state.last_user_name = my_name
-            st.session_state.source_class = None
-            st.session_state.target_teacher = None
-            st.session_state.last_clicked_cell = None
 
         original_my_grid = create_schedule_grid(df, my_name)
         display_grid = original_my_grid.copy()
@@ -600,15 +599,14 @@ with tab_visual:
                 st.subheader(f"👀 【{st.session_state.target_teacher}老師】調課後狀態")
                 target_grid = create_schedule_grid(df, st.session_state.target_teacher)
                 
-                # 【優化：雙人互換】
-                # 對方原本的課被您拿走，所以在對方的課表上，那節課會變成「空堂」(不顯示)
+                # 對方的課表變化 (隱藏對方被拿走的課，顯示對方新接的課)
                 tr_target = st.session_state.target_period - 1
                 tc_target = day_en.index(st.session_state.target_day_en)
-                target_grid.iloc[tr_target, tc_target] = ""
+                target_grid.iloc[tr_target, tc_target] = "" # 清空對方原本的課
                 
-                # 對方來上您的時段，所以對方的課表上，會顯示出您的班級與對方的科目 (加上不可見字元觸發上色)
                 tr_source = st.session_state.source_period - 1
                 tc_source = day_en.index(st.session_state.source_day_en)
+                # 使用不可見字元 \u200b 觸發上色，讓版面乾淨一致
                 target_grid.iloc[tr_source, tc_source] = f"{st.session_state.source_class}班\n{st.session_state.target_subject}\u200b"
                 
                 try: styled_target_grid = target_grid.style.map(style_target_grid)
@@ -618,11 +616,17 @@ with tab_visual:
                 
                 st.markdown("### 📥 將此配對加入列印清單")
                 col_d1, col_d2, col_btn = st.columns([2, 2, 1.5])
-                with col_d1: date_mine = st.date_input(f"您的原上課日 ({st.session_state.source_day_zh})", value=get_next_weekday(st.session_state.source_day_zh), key="d1_tab1")
-                with col_d2: date_target = st.date_input(f"對方原上課日 ({st.session_state.target_day_zh})", value=get_next_weekday(st.session_state.target_day_zh), key="d2_tab1")
+                
+                # 【優化1】：動態綁定 key，確保點選不同老師時，日期選擇器會重新渲染正確日期
+                k_d1 = f"d1_{st.session_state.target_teacher}_{st.session_state.target_day_en}_{st.session_state.target_period}"
+                k_d2 = f"d2_{st.session_state.target_teacher}_{st.session_state.target_day_en}_{st.session_state.target_period}"
+                
+                with col_d1: date_mine = st.date_input(f"您的原上課日 ({st.session_state.source_day_zh})", value=get_next_weekday(st.session_state.source_day_zh), key=k_d1)
+                with col_d2: date_target = st.date_input(f"對方原上課日 ({st.session_state.target_day_zh})", value=get_next_weekday(st.session_state.target_day_zh), key=k_d2)
+                
                 with col_btn:
                     st.markdown("<br>", unsafe_allow_html=True)
-                    if st.button("➕ 一鍵加入", type="primary", use_container_width=True, key="btn_tab1"):
+                    if st.button("➕ 一鍵加入", type="primary", use_container_width=True, key=f"btn_{k_d1}"):
                         source_period_str = f"第 {st.session_state.source_period} 節"
                         target_period_str = f"第 {st.session_state.target_period} 節"
                         
@@ -638,30 +642,22 @@ with tab_visual:
                                 {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, "日期": pd.to_datetime(date_target), "節次": target_period_str, "科目": str(st.session_state.target_subject).strip(), "老師": st.session_state.target_teacher, "調/代課": "調課"}
                             ])
                             st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
-                            st.success("✅ 已成功加入！請至第三步查看。")
+                            st.success("✅ 已成功加入！請至第二步查看。")
                         
             elif st.session_state.source_class: st.info("👈 請在左側點擊一個帶有 **🌟** 標記的格子選擇老師。")
-            else: st.info("👈 請先在左側課表點選一堂您想調走的課。")
-    else: st.info("👋 歡迎！請先選擇您的名字以顯示課表。")
+            else: st.info("👈 準備好了嗎？請先在左側課表點選一堂您想調走的課。")
+            
+        # ================== 【優化5】：進階三角調 放置於第一步下方 ==================
+        st.markdown("<br><hr><br>", unsafe_allow_html=True)
+        st.header("🔺 進階三角調")
+        st.info("💡 **當您想去的時段無法與對方直接互換時**：請在下方選定您想去的目標空堂，系統將自動尋找可行的第三方橋樑。")
 
-# ----------------- Tab 2: 🔺 第二步：進階三角調課 -----------------
-with tab_triangle:
-    tri_my_name = st.selectbox("🙋‍♂️ 請輸入您的名字 (三角調課)：", all_teachers, index=None, placeholder="請選擇您的名字...", key="name_tab2")
-    st.markdown("---")
-
-    if tri_my_name:
-        if tri_my_name != st.session_state.tri_last_user:
-            for k in ["tri_source_class", "tri_source_subject", "tri_source_period", "tri_source_day_en", "tri_source_day_zh", "tri_target_period", "tri_target_day_en", "tri_target_day_zh", "tri_last_clicked_cell"]:
-                st.session_state[k] = None
-            st.session_state.tri_last_user = tri_my_name
-
-        tri_my_grid = create_schedule_grid(df, tri_my_name)
+        tri_my_grid = create_schedule_grid(df, my_name)
         tri_display_grid = tri_my_grid.copy()
         
         triangles = []
         if st.session_state.tri_source_class:
-            triangles = find_triangle_swaps(df, tri_my_name, st.session_state.tri_source_class, st.session_state.tri_source_day_en, st.session_state.tri_source_period)
-            
+            triangles = find_triangle_swaps(df, my_name, st.session_state.tri_source_class, st.session_state.tri_source_day_en, st.session_state.tri_source_period)
             source_r = st.session_state.tri_source_period - 1
             source_c = day_zh.index(st.session_state.tri_source_day_zh)
             orig_val = tri_my_grid.iloc[source_r, source_c]
@@ -676,13 +672,13 @@ with tab_triangle:
         col_t1, col_t2 = st.columns([1, 1], gap="large")
 
         with col_t1:
-            st.subheader(f"📅 【{tri_my_name}老師】的課表")
-            st.info("🎯 **操作說明：**\n1️⃣ 點擊想調走的課。\n2️⃣ 點擊橘色 **🔺[選此時段]** 來指定想去的空堂。")
+            st.subheader(f"📅 【{my_name}老師】的課表")
+            st.write("🎯 **操作說明：**\n1️⃣ 點擊想調走的課。\n2️⃣ 點擊橘色 **🔺[選此時段]** 來指定想去的空堂。")
             
             try: styled_tri_grid = tri_display_grid.style.map(style_my_grid)
             except AttributeError: styled_tri_grid = tri_display_grid.style.applymap(style_my_grid)
 
-            event_tri = st.dataframe(styled_tri_grid, use_container_width=True, height=400, on_select="rerun", selection_mode="single-cell", key="tri_schedule_grid")
+            event_tri = st.dataframe(styled_tri_grid, use_container_width=True, height=320, on_select="rerun", selection_mode="single-cell", key="tri_schedule_grid")
 
             selection_tri = event_tri.selection.cells
             if selection_tri:
@@ -702,7 +698,7 @@ with tab_triangle:
                         r_idx = t_period - 1
                         orig_content = tri_my_grid.iloc[r_idx, c_idx]
                         if orig_content != "":
-                            match_data = df[(df['Teacher'] == tri_my_name) & (df['Day'] == t_day_en) & (df['Period'] == t_period)]
+                            match_data = df[(df['Teacher'] == my_name) & (df['Day'] == t_day_en) & (df['Period'] == t_period)]
                             if not match_data.empty:
                                 st.session_state.tri_source_class = match_data.iloc[0]['Class']
                                 st.session_state.tri_source_subject = match_data.iloc[0]['Subject']
@@ -732,7 +728,7 @@ with tab_triangle:
                 if valid_tris:
                     st.subheader(f"✨ 完美三角調課方案")
                     teacher_b_name = valid_tris[0]['Teacher_B']
-                    st.info(f"📍 目標：您將前往 [{st.session_state.tri_target_day_zh}第{st.session_state.tri_target_period}節] 取代 {teacher_b_name} 老師。")
+                    st.success(f"📍 目標：您將前往 [{st.session_state.tri_target_day_zh}第{st.session_state.tri_target_period}節] 取代 {teacher_b_name} 老師。")
                     
                     bridge_options = {f"{t['Teacher_C']}老師": t for t in valid_tris}
                     selected_bridge = st.selectbox("🎯 系統找到以下橋樑老師，請選擇：", list(bridge_options.keys()))
@@ -742,24 +738,23 @@ with tab_triangle:
                     grid_b = create_schedule_grid(df, teacher_b_name)
                     grid_c = create_schedule_grid(df, teacher_c_name)
                     
-                    # 【優化：三角互換，顯示最終狀態】
-                    # B 的課表變化
+                    # B 老師的課表變化
                     r_b_gives = tri['Period_B'] - 1
                     c_b_gives = day_en.index(tri['Day_B'])
-                    grid_b.iloc[r_b_gives, c_b_gives] = "" # B 離開原本時段
+                    grid_b.iloc[r_b_gives, c_b_gives] = "" # 清空 B 原本的課
                     
                     r_b_takes = tri['Period_C'] - 1
                     c_b_takes = day_en.index(tri['Day_C'])
-                    grid_b.iloc[r_b_takes, c_b_takes] = f"{st.session_state.tri_source_class}班\n{tri['Subject_B']}\u200b" # B 去 C 的時段上課
+                    grid_b.iloc[r_b_takes, c_b_takes] = f"{st.session_state.tri_source_class}班\n{tri['Subject_B']}\u200b"
                     
-                    # C 的課表變化
+                    # C 老師的課表變化
                     r_c_gives = tri['Period_C'] - 1
                     c_c_gives = day_en.index(tri['Day_C'])
-                    grid_c.iloc[r_c_gives, c_c_gives] = "" # C 離開原本時段
+                    grid_c.iloc[r_c_gives, c_c_gives] = "" # 清空 C 原本的課
                     
                     r_c_takes = st.session_state.tri_source_period - 1
                     c_c_takes = day_en.index(st.session_state.tri_source_day_en)
-                    grid_c.iloc[r_c_takes, c_c_takes] = f"{st.session_state.tri_source_class}班\n{tri['Subject_C']}\u200b" # C 來我的時段上課
+                    grid_c.iloc[r_c_takes, c_c_takes] = f"{st.session_state.tri_source_class}班\n{tri['Subject_C']}\u200b"
                     
                     try:
                         style_b = grid_b.style.map(style_target_grid)
@@ -768,30 +763,35 @@ with tab_triangle:
                         style_b = grid_b.style.applymap(style_target_grid)
                         style_c = grid_c.style.applymap(style_target_grid)
 
+                    # 【優化2 & 3】：上下排列課表，並修正文字
                     st.markdown(f"**👀 {teacher_b_name} 老師的課表變化**")
-                    st.dataframe(style_b, use_container_width=True, height=180)
+                    st.dataframe(style_b, use_container_width=True, height=320)
                     
-                    st.markdown(f"**👀 {teacher_c_name} 老師 (橋樑) 的課表變化**")
-                    st.dataframe(style_c, use_container_width=True, height=180)
+                    st.markdown(f"**👀 {teacher_c_name} 老師的課表變化**")
+                    st.dataframe(style_c, use_container_width=True, height=320)
                     
                     col_dt1, col_dt2, col_dt3, col_dbtn = st.columns([1, 1, 1, 1.2])
                     day_c_zh = [k for k, v in day_map_rev.items() if v == tri['Day_C']][0]
-                    with col_dt1: d_mine = st.date_input("您的原上課日", value=get_next_weekday(st.session_state.tri_source_day_zh))
-                    with col_dt2: d_b = st.date_input(f"{teacher_b_name} 原上課日", value=get_next_weekday(st.session_state.tri_target_day_zh))
-                    with col_dt3: d_c = st.date_input(f"{teacher_c_name} 原上課日", value=get_next_weekday(day_c_zh))
+                    
+                    # 動態 Key
+                    k_t_prefix = f"tri_{st.session_state.tri_target_day_en}_{st.session_state.tri_target_period}_{teacher_c_name}"
+                    
+                    with col_dt1: d_mine = st.date_input("您的原上課日", value=get_next_weekday(st.session_state.tri_source_day_zh), key=f"{k_t_prefix}_1")
+                    with col_dt2: d_b = st.date_input(f"{teacher_b_name} 原上課日", value=get_next_weekday(st.session_state.tri_target_day_zh), key=f"{k_t_prefix}_2")
+                    with col_dt3: d_c = st.date_input(f"{teacher_c_name} 原上課日", value=get_next_weekday(day_c_zh), key=f"{k_t_prefix}_3")
                     
                     with col_dbtn:
                         st.markdown("<br>", unsafe_allow_html=True)
-                        if st.button("➕ 三角一鍵加入", type="primary", use_container_width=True):
+                        if st.button("➕ 三角一鍵加入", type="primary", use_container_width=True, key=f"btn_{k_t_prefix}"):
                             p_mine_str = f"第 {st.session_state.tri_source_period} 節"
                             p_b_str = f"第 {tri['Period_B']} 節"
                             p_c_str = f"第 {tri['Period_C']} 節"
                             
-                            if check_source_conflict(st.session_state.res_data, tri_my_name, d_mine, p_mine_str) or \
+                            if check_source_conflict(st.session_state.res_data, my_name, d_mine, p_mine_str) or \
                                check_source_conflict(st.session_state.res_data, teacher_b_name, d_b, p_b_str) or \
                                check_source_conflict(st.session_state.res_data, teacher_c_name, d_c, p_c_str):
                                 st.error("⚠️ 衝堂：有老師的時段已加入過清單！")
-                            elif check_destination_conflict(st.session_state.res_data, tri_my_name, d_b, p_b_str) or \
+                            elif check_destination_conflict(st.session_state.res_data, my_name, d_b, p_b_str) or \
                                  check_destination_conflict(st.session_state.res_data, teacher_b_name, d_c, p_c_str) or \
                                  check_destination_conflict(st.session_state.res_data, teacher_c_name, d_mine, p_mine_str):
                                 st.error("⚠️ 目標衝堂：調入後會發生衝堂！")
@@ -800,16 +800,19 @@ with tab_triangle:
                                 next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
                                 
                                 new_rows = pd.DataFrame([
-                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.tri_source_class, "日期": pd.to_datetime(d_mine), "節次": p_mine_str, "科目": str(st.session_state.tri_source_subject).strip(), "老師": tri_my_name, "調/代課": "調課"},
+                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.tri_source_class, "日期": pd.to_datetime(d_mine), "節次": p_mine_str, "科目": str(st.session_state.tri_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
                                     {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.tri_source_class, "日期": pd.to_datetime(d_b), "節次": p_b_str, "科目": str(tri['Subject_B']).strip(), "老師": teacher_b_name, "調/代課": "調課"},
                                     {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.tri_source_class, "日期": pd.to_datetime(d_c), "節次": p_c_str, "科目": str(tri['Subject_C']).strip(), "老師": teacher_c_name, "調/代課": "調課"}
                                 ])
                                 st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
-                                st.success("✅ 三角方案已成功加入！請至第三步查看。")
+                                st.success("✅ 三角方案已成功加入！請至第二步查看。")
             elif st.session_state.tri_source_class: st.info("👈 請在左側點擊 🔺[選此時段] 標記來選擇您想去的空堂。")
             else: st.info("👈 準備好了嗎？請先在左側課表點選一堂您想調走的課。")
+    else:
+        st.info("👋 歡迎！請先選擇您的名字以顯示課表。")
 
-# ----------------- Tab 3: 🖨️ 第三步：列印單據與輸出 -----------------
+
+# ----------------- Tab 2: 🖨️ 第二步：列印單據與輸出 -----------------
 with tab_print:
     c1, c2, c3 = st.columns(3)
     with c1: sch_year = st.text_input("學年度", value="114")
@@ -896,7 +899,7 @@ with tab_print:
                 st.download_button(label="📥 下載 Word 檔 (可編輯)", data=data_docx, file_name=f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
                 
             with col_pdf:
-                if st.button("📥 轉換並下載 PDF (手機建議)", use_container_width=True, type="primary"):
+                if st.button("📥 下載 PDF (手機建議)", use_container_width=True, type="primary"):
                     with st.spinner("🚀 伺服器正在努力轉換中 (約需 5~10 秒，請耐心等候)..."):
                         pdf_data = docx_to_pdf(data_docx)
                         if pdf_data:
