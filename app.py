@@ -15,7 +15,7 @@ def load_data():
 
 # ================= 3. 調課核心演算法 =================
 def find_swap_options(df, my_name, target_class, my_day, my_period):
-    """尋找所有符合互換條件的課"""
+    """尋找該班級中所有符合互換條件的課"""
     class_schedule = df[df['Class'] == target_class]
     potential_matches = class_schedule[class_schedule['Teacher'] != my_name]
     
@@ -26,6 +26,7 @@ def find_swap_options(df, my_name, target_class, my_day, my_period):
         other_period = row['Period']
         other_subject = row['Subject']
         
+        # 雙方空堂檢查
         is_other_busy = df[(df['Teacher'] == other_teacher) & 
                            (df['Day'] == my_day) & 
                            (df['Period'] == my_period)]
@@ -43,7 +44,7 @@ def find_swap_options(df, my_name, target_class, my_day, my_period):
     return recommendations
 
 def create_schedule_grid(df, teacher_name):
-    """轉換成 5x7 課表網格"""
+    """將資料轉換成 5x7 的課表網格"""
     t_df = df[df['Teacher'] == teacher_name].copy()
     if t_df.empty:
         return pd.DataFrame()
@@ -65,35 +66,34 @@ if "last_user_name" not in st.session_state:
     st.session_state.last_user_name = None
 if "source_class" not in st.session_state:
     st.session_state.source_class = None
+    st.session_state.source_subject = None  # 記住您這節課原本上什麼科目
     st.session_state.source_period = None
     st.session_state.source_day_en = None
     st.session_state.source_day_zh = None
 if "target_teacher" not in st.session_state:
     st.session_state.target_teacher = None
+    st.session_state.target_subject = None  # 記住對方那節課原本上什麼科目
     st.session_state.target_period = None
     st.session_state.target_day_en = None
     st.session_state.target_day_zh = None
 if "last_clicked_cell" not in st.session_state:
     st.session_state.last_clicked_cell = None
 
-# ================= 5. 樣式美化函數 (優化視覺) =================
+# ================= 5. 樣式美化函數 =================
 def style_my_grid(val):
     val_str = str(val)
-    if "🌟點選換" in val_str:
-        # 優化一：將選項文字變淺灰色，背景變極淺灰，避免喧賓奪主
-        return "color: #b0b0b0; background-color: #fafafa;" 
-    elif "🔄[欲調走]" in val_str:
-        # 標記自己想調走的課 (紅字)
+    if "🌟 " in val_str:
+        # 讓星星選項變成淺灰色，不會干擾原本課表的視覺
+        return "color: #a0a0a0; background-color: #fdfdfd;" 
+    elif "🔄[" in val_str:
         return "color: #d9534f; font-weight: bold; background-color: #fdf5f5;"
     return ""
 
 def style_target_grid(val):
     val_str = str(val)
     if "🌟[" in val_str:
-        # 自己去上的課 (藍字)
         return "color: #0066cc; font-weight: bold; background-color: #f0f8ff;"
     elif "🔄[" in val_str:
-        # 對方幫忙代的課 (紅字)
         return "color: #d9534f; font-weight: bold; background-color: #fdf5f5;"
     return ""
 
@@ -120,6 +120,7 @@ if my_name:
     if my_name != st.session_state.last_user_name:
         st.session_state.last_user_name = my_name
         st.session_state.source_class = None
+        st.session_state.source_subject = None
         st.session_state.target_teacher = None
         st.session_state.last_clicked_cell = None
 
@@ -130,7 +131,7 @@ if my_name:
     original_my_grid = create_schedule_grid(df, my_name)
     display_grid = original_my_grid.copy()
 
-    # ====== 邏輯：繪製左側課表 ======
+    # ====== 左側課表資料處理 ======
     if st.session_state.source_class:
         swaps = find_swap_options(df, my_name, st.session_state.source_class, st.session_state.source_day_en, st.session_state.source_period)
         
@@ -142,13 +143,14 @@ if my_name:
         for s in swaps:
             r = s['OtherPeriod'] - 1
             c = day_en.index(s['OtherDay'])
-            display_grid.iloc[r, c] = f"🌟點選換:\n{s['Teacher']}"
+            # 【優化2】：文字極簡化，只留下星星和名字
+            display_grid.iloc[r, c] = f"🌟 {s['Teacher']}"
 
     col_left, col_right = st.columns([1, 1], gap="large")
 
     with col_left:
         st.subheader(f"📅 【{my_name}老師】的課表")
-        st.info("🎯 **操作步驟：**\n1️⃣ 點擊您想調走的班級。\n2️⃣ 點擊出現 **🌟** 的淺色格子選擇老師。")
+        st.info("🎯 **操作步驟：**\n1️⃣ 點擊您想調走的班級。\n2️⃣ 點擊出現 **🌟 老師名字** 的格子選擇對象。")
         
         # 套用自訂義顏色樣式
         try:
@@ -165,6 +167,7 @@ if my_name:
             key="my_schedule_grid"
         )
 
+        # 處理點擊事件
         selection = event.selection.cells
         if selection:
             cell = selection[0]
@@ -200,6 +203,7 @@ if my_name:
                         match_data = df[(df['Teacher'] == my_name) & (df['Day'] == t_day_en) & (df['Period'] == t_period)]
                         if not match_data.empty:
                             st.session_state.source_class = match_data.iloc[0]['Class']
+                            st.session_state.source_subject = match_data.iloc[0]['Subject']
                             st.session_state.source_period = t_period
                             st.session_state.source_day_en = t_day_en
                             st.session_state.source_day_zh = t_day_zh
@@ -213,6 +217,7 @@ if my_name:
                             for s in swaps:
                                 if s['OtherDay'] == t_day_en and s['OtherPeriod'] == t_period:
                                     st.session_state.target_teacher = s['Teacher']
+                                    st.session_state.target_subject = s['Subject']
                                     st.session_state.target_period = s['OtherPeriod']
                                     st.session_state.target_day_en = s['OtherDay']
                                     st.session_state.target_day_zh = t_day_zh
@@ -228,7 +233,7 @@ if my_name:
             st.session_state.last_clicked_cell = None
 
         if st.session_state.source_class:
-            st.success(f"📍 準備將 **{st.session_state.source_day_zh} 第 {st.session_state.source_period} 節 ({st.session_state.source_class}班)** 調走。")
+            st.success(f"📍 準備調走：**{st.session_state.source_day_zh} 第 {st.session_state.source_period} 節 ({st.session_state.source_class}班 {st.session_state.source_subject})**")
 
     # ====== 右側：目標老師的課表預覽 ======
     with col_right:
@@ -238,23 +243,23 @@ if my_name:
             
             target_grid = create_schedule_grid(df, st.session_state.target_teacher)
             
-            # 優化二：直接標上對方與自己的真實姓名
+            # 【優化1】：精確對應「您去教您的科目，對方去教對方的科目」
+            
+            # 對方來上我原本的時段 (對方教他的科目)
             tr_source = st.session_state.source_period - 1
             tc_source = day_en.index(st.session_state.source_day_en)
-            target_grid.iloc[tr_source, tc_source] = f"🔄[{st.session_state.target_teacher}]\n{st.session_state.source_class}班"
+            target_grid.iloc[tr_source, tc_source] = f"🔄[{st.session_state.target_teacher}]\n{st.session_state.source_class}班\n{st.session_state.target_subject}"
             
+            # 我去上對方原本的時段 (我教我的科目)
             tr_target = st.session_state.target_period - 1
             tc_target = day_en.index(st.session_state.target_day_en)
-            original_target_val = target_grid.iloc[tr_target, tc_target]
-            target_grid.iloc[tr_target, tc_target] = f"🌟[{my_name}]\n{original_target_val}"
+            target_grid.iloc[tr_target, tc_target] = f"🌟[{my_name}]\n{st.session_state.source_class}班\n{st.session_state.source_subject}"
             
-            # 套用與左側一致的顏色樣式
             try:
                 styled_target_grid = target_grid.style.map(style_target_grid)
             except AttributeError:
                 styled_target_grid = target_grid.style.applymap(style_target_grid)
                 
-            # 將右側也改用 st.dataframe 確保左右對齊與高度一致
             st.dataframe(
                 styled_target_grid,
                 use_container_width=True,
