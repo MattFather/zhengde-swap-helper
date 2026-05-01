@@ -407,23 +407,22 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df):
     doc.save(bio)
     return bio.getvalue()
 
-
-# ================= 5. 系統狀態記憶與初始化 (🚨修復核心區🚨) =================
+# ================= 5. 系統狀態記憶與初始化 (🚨 型態統一修復區 🚨) =================
 for key in ["last_user_name", "source_class", "source_subject", "source_period", "source_day_en", "source_day_zh", 
             "target_teacher", "target_subject", "target_period", "target_day_en", "target_day_zh", "last_clicked_cell"]:
     if key not in st.session_state: st.session_state[key] = None
 
-# 【修正】明確宣告 DataFrame 內每個欄位的「資料型態 (dtype)」，防止 st.data_editor 報錯
+# 【終極解法】不強加 NumPy 型態，使用原生 Python 格式來建立空資料表，確保與 Streamlit 的 Data Editor 完全相容
 if 'res_data' not in st.session_state:
     st.session_state.res_data = pd.DataFrame({
         "勾選列印資料": pd.Series(dtype='bool'),
-        "配對編號": pd.Series(dtype='str'),
-        "班級": pd.Series(dtype='str'),
-        "日期": pd.Series(dtype='datetime64[ns]'),  # 確保是日期格式
-        "節次": pd.Series(dtype='str'),
-        "科目": pd.Series(dtype='str'),
-        "老師": pd.Series(dtype='str'),
-        "調/代課": pd.Series(dtype='str')
+        "配對編號": pd.Series(dtype='object'), # 統一為 Object
+        "班級": pd.Series(dtype='object'),
+        "日期": pd.Series(dtype='object'), # Object 型態可以完美包容 datetime.date
+        "節次": pd.Series(dtype='object'),
+        "科目": pd.Series(dtype='object'),
+        "老師": pd.Series(dtype='object'),
+        "調/代課": pd.Series(dtype='object')
     })
 
 def style_my_grid(val):
@@ -580,13 +579,13 @@ with tab_visual:
                         current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
                         next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
                         
-                        # 【修正】使用 pd.to_datetime 確保加入的日期維持 datetime64 格式
+                        # 【修正】直接使用原生 date_mine / date_target (datetime.date)，不亂套 Pandas Timestamp
                         new_rows = pd.DataFrame([
                             {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, 
-                             "日期": pd.to_datetime(date_mine), "節次": f"第 {st.session_state.source_period} 節", 
+                             "日期": date_mine, "節次": f"第 {st.session_state.source_period} 節", 
                              "科目": st.session_state.source_subject, "老師": my_name, "調/代課": "調課"},
                             {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, 
-                             "日期": pd.to_datetime(date_target), "節次": f"第 {st.session_state.target_period} 節", 
+                             "日期": date_target, "節次": f"第 {st.session_state.target_period} 節", 
                              "科目": st.session_state.target_subject, "老師": st.session_state.target_teacher, "調/代課": "調課"}
                         ])
                         st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
@@ -613,9 +612,9 @@ with tab_print:
         if 'last_uploaded_id' not in st.session_state or st.session_state.last_uploaded_id != uploaded_file.file_id:
             try:
                 df_upload = pd.read_csv(uploaded_file, keep_default_na=False, dtype=str)
-                # 【修正】上傳檔案時強制轉換為一致的資料型態
+                # 【修正】上傳資料時，確保日期轉為純正的 python date 物件
                 if "日期" in df_upload.columns:
-                    df_upload["日期"] = pd.to_datetime(df_upload["日期"], errors='coerce')
+                    df_upload["日期"] = pd.to_datetime(df_upload["日期"], errors='coerce').dt.date
                 if "勾選列印資料" in df_upload.columns:
                     df_upload["勾選列印資料"] = df_upload["勾選列印資料"].astype(str).str.lower() == 'true'
                 for col in ["配對編號", "班級", "節次", "科目", "老師", "調/代課"]:
@@ -631,6 +630,8 @@ with tab_print:
 
     st.markdown("#### 📝 待列印清單編輯區")
     st.info("這裡的資料就是從第一頁「一鍵加入」傳送過來的！您可以自由修改日期或增刪資料，確認無誤後再點擊下方列印。")
+    
+    # 這裡的資料現在與 Streamlit 要求的格式完美契合
     edited_df = st.data_editor(
         st.session_state.res_data,
         column_config={
