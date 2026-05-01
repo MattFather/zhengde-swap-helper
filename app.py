@@ -294,25 +294,31 @@ def generate_timetable_block(container_cell, title_suffix, sch_year, sch_term, i
                     run_type.font.size = Pt(8)
                             
         elif x_marks and "教師通知聯" in title_suffix:
-            row_data = x_marks[0]
-            p1 = cell.paragraphs[0]
-            p1.paragraph_format.space_after = Pt(0)
-            run_date_cell = p1.add_run(pd.to_datetime(row_data["日期"]).strftime("%m/%d"))
-            run_date_cell.font.size = Pt(9)
-            run_date_cell.bold = True
-            
-            p2 = cell.add_paragraph()
-            p2.paragraph_format.space_after = Pt(0)
-            run_x = p2.add_run("✖")
-            run_x.font.size = Pt(14)
-            run_x.bold = True
-            
-            p3 = cell.add_paragraph()
-            p3.paragraph_format.space_after = Pt(0)
-            target_info = str(row_data.get("原資訊", "")).strip()
-            run_text = p3.add_run(target_info if target_info else "(已調走)")
-            run_text.font.size = Pt(8)
-            run_text.bold = True
+            # 【修復 Bug】：將原本只抓取第一筆的邏輯，改為迴圈遍歷所有被調走的紀錄
+            for idx, row_data in enumerate(x_marks):
+                if idx == 0: 
+                    p1 = cell.paragraphs[0]
+                else:
+                    cell.add_paragraph()
+                    p1 = cell.add_paragraph()
+                    
+                p1.paragraph_format.space_after = Pt(0)
+                run_date_cell = p1.add_run(pd.to_datetime(row_data["日期"]).strftime("%m/%d"))
+                run_date_cell.font.size = Pt(9)
+                run_date_cell.bold = True
+                
+                p2 = cell.add_paragraph()
+                p2.paragraph_format.space_after = Pt(0)
+                run_x = p2.add_run("✖")
+                run_x.font.size = Pt(14)
+                run_x.bold = True
+                
+                p3 = cell.add_paragraph()
+                p3.paragraph_format.space_after = Pt(0)
+                target_info = str(row_data.get("原資訊", "")).strip()
+                run_text = p3.add_run(target_info if target_info else "(已調走)")
+                run_text.font.size = Pt(8)
+                run_text.bold = True
 
     for r in range(9):
         for c in range(6):
@@ -781,7 +787,6 @@ with tab_visual:
                             p_b_str = f"第 {tri['Period_B']} 節"
                             p_c_str = f"第 {tri['Period_C']} 節"
                             
-                            # 獨立的三角調課衝堂提醒，清楚標示是哪一位老師出問題
                             if check_source_conflict(st.session_state.res_data, my_name, d_mine, p_mine_str):
                                 st.error(f"⚠️ 衝堂警告：您 ({my_name}老師) 在 {d_mine} {p_mine_str} 的課已加入過清單！")
                             elif check_source_conflict(st.session_state.res_data, teacher_b_name, d_b, p_b_str):
@@ -898,7 +903,7 @@ with tab_print:
                 st.download_button(label="📥 下載 Word 檔 (可編輯)", data=data_docx, file_name=f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
                 
             with col_pdf:
-                if st.button("📥 轉換並下載 PDF (手機建議)", use_container_width=True, type="primary"):
+                if st.button("📥 下載 PDF (手機建議)", use_container_width=True, type="primary"):
                     with st.spinner("🚀 伺服器正在努力轉換中 (約需 5~10 秒，請耐心等候)..."):
                         pdf_data = docx_to_pdf(data_docx)
                         if pdf_data:
