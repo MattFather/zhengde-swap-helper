@@ -72,11 +72,8 @@ except FileNotFoundError:
     st.error("找不到 schedule.csv 檔案。")
     st.stop()
 
-# 獲取所有老師清單
+# 獲取所有老師清單 (無預設值)
 all_teachers = sorted(df['Teacher'].dropna().unique())
-
-# --- 修正點：取消預設名字 ---
-# index=None 代表起始為空，placeholder 提供提示文字
 my_name = st.selectbox(
     "🙋‍♂️ 請輸入您的名字：", 
     all_teachers, 
@@ -93,10 +90,10 @@ if my_name:
     day_zh = ['星期一', '星期二', '星期三', '星期四', '星期五']
     day_map_rev = dict(zip(day_zh, day_en))
 
-    # --- 左側：操作區 ---
+    # --- 左側：原始課表 (操作區) ---
     with col_left:
         st.subheader(f"📅 【{my_name}老師】的課表")
-        st.info("💡 操作說明：點擊下方課表中的「班級」格子即可開始配對。")
+        st.info("💡 操作說明：點擊下方課表中的「班級」，右側將直接顯示調課落點。")
         
         my_grid = create_schedule_grid(df, my_name)
         
@@ -135,49 +132,44 @@ if my_name:
                 match_data = df[(df['Teacher'] == my_name) & (df['Day'] == t_day_en) & (df['Period'] == t_period)]
                 if not match_data.empty:
                     t_class = match_data.iloc[0]['Class']
-                    st.success(f"📍 已鎖定：{t_day_zh} 第 {t_period} 節 ({t_class}班)")
+                    st.success(f"📍 已鎖定欲調走：{t_day_zh} 第 {t_period} 節 ({t_class}班)")
                     
-                    # 搜尋名單
+                    # 搜尋所有可用調課方案
                     swaps = find_swap_options(df, my_name, t_class, t_day_en, t_period)
                     
                     if not swaps:
                         st.error("😢 此班級目前沒有可直接互換的對象。")
                     else:
-                        st.write("---")
-                        teacher_groups = {}
-                        for s in swaps:
-                            if s['Teacher'] not in teacher_groups:
-                                teacher_groups[s['Teacher']] = []
-                            teacher_groups[s['Teacher']].append(s)
-
-                        st.subheader("🤝 選擇調課對象")
-                        selected_teacher = st.radio(
-                            "🔍 請點選老師名字查看調課方案：",
-                            options=list(teacher_groups.keys()),
-                            horizontal=True,
-                            index=None,
-                            key="teacher_radio"
-                        )
-                        
-                        if selected_teacher:
-                            teacher_slots = teacher_groups[selected_teacher]
-                            with col_right:
-                                st.subheader(f"👀 【{selected_teacher}老師】的完整課表")
-                                st.info(f"💡 課表中標記 **🌟** 的格子，即為可對調的時段。")
-                                
-                                target_grid = create_schedule_grid(df, teacher_name=selected_teacher)
-                                for slot in teacher_slots:
-                                    r = slot['OtherPeriod'] - 1
-                                    c = day_en.index(slot['OtherDay'])
-                                    target_grid.iloc[r, c] += " 🌟"
-                                
-                                st.table(target_grid)
+                        # --- 右側：調課落點預測圖 (直接畫在自己的課表上) ---
+                        with col_right:
+                            st.subheader(f"✨ 【{my_name}老師】的調課落點分析")
+                            st.info(f"💡 帶有 **🌟** 的格子，就是您可以直接換過去的時段與老師。")
+                            
+                            # 複製一份自己的課表來當作畫布
+                            result_grid = my_grid.copy()
+                            
+                            # 1. 標記準備調走的那節課
+                            original_val = result_grid.iloc[t_period-1, day_zh.index(t_day_zh)]
+                            result_grid.iloc[t_period-1, day_zh.index(t_day_zh)] = f"🔄 [欲調走]\n{original_val}"
+                            
+                            # 2. 將所有可以調的選項，精準填入對應的空堂格子中
+                            for s in swaps:
+                                r = s['OtherPeriod'] - 1
+                                c = day_en.index(s['OtherDay'])
+                                # 直接把對方老師與科目寫在您的空堂上
+                                result_grid.iloc[r, c] = f"🌟換: {s['Teacher']}\n({s['Subject']})"
+                            
+                            # 顯示結果
+                            st.dataframe(
+                                result_grid,
+                                use_container_width=True,
+                                height=320
+                            )
                 else:
                     st.error("讀取課程資訊失敗。")
         else:
             st.info("👈 請先點擊左側課表中的課程。")
             with col_right:
-                st.info("📊 選取課程後，右側會同步顯示對方的課表。")
+                st.info("📊 選取課程後，這裡會直接將可換的方案映射到您的空堂上。")
 else:
-    # 尚未選擇名字時的提示
-    st.info("👋 歡迎使用調課小幫手！請先在上方選單選擇或輸入您的名字。")
+    st.info("👋 歡迎使用調課小幫手！請先在上方選單選擇您的名字。")
