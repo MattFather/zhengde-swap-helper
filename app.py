@@ -238,22 +238,28 @@ def generate_timetable_block(container_cell, title_suffix, sch_year, sch_term, i
                 run_date_cell.font.size = Pt(9)
                 run_date_cell.bold = True
                 
-                # 第 2 行：班級與科目 (專屬縮小區)
+                # 第 2 行：班級與科目
                 p2 = cell.add_paragraph()
                 p2.paragraph_format.space_after = Pt(0)
-                subj_display = f"{c_name} {s_name}".strip() if is_teacher_side and c_name else s_name
-                run_subj = p2.add_run(subj_display)
                 
-                # 如果字數過多 (例如 716 自然探究，共8字元)，略微縮小科目字體，其餘維持
-                if len(subj_display) >= 8:
-                    run_subj.font.size = Pt(7.5)
-                elif len(subj_display) >= 6:
-                    run_subj.font.size = Pt(8)
-                else:
-                    run_subj.font.size = Pt(9)
-                run_subj.bold = True
+                # 【優化2】：班級與科目分開處理，班級永遠維持 9pt
+                if is_teacher_side and c_name:
+                    run_c = p2.add_run(f"{c_name} ")
+                    run_c.font.size = Pt(9)
+                    run_c.bold = True
                 
-                # 第 3 行：老師名稱 (恢復預設尺寸)
+                # 單獨為科目設定大小
+                if s_name:
+                    run_s = p2.add_run(s_name)
+                    run_s.bold = True
+                    if len(s_name) > 4:
+                        run_s.font.size = Pt(7.5) # 超過4個字 (例如5個字以上)
+                    elif len(s_name) == 4:
+                        run_s.font.size = Pt(8.0) # 剛好4個字 (例如 自然探究)
+                    else:
+                        run_s.font.size = Pt(9.0) # 3個字以內 (例如 國文)
+                
+                # 第 3 行：老師名稱 (恢復預設 9pt)
                 p3 = cell.add_paragraph()
                 p3.paragraph_format.space_after = Pt(0)
                 run_teacher = p3.add_run(str(row_data["老師"]))
@@ -302,8 +308,8 @@ def generate_timetable_block(container_cell, title_suffix, sch_year, sch_term, i
             curr_cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
             for para in curr_cell.paragraphs:
                 para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                # 強制緊縮行距，避免被撐開
-                para.paragraph_format.line_spacing = Pt(10)
+                # 【優化1】：恢復最原始美觀的 1.0 行距
+                para.paragraph_format.line_spacing = 1.0
                 para.paragraph_format.space_before = Pt(0)
                 para.paragraph_format.space_after = Pt(0)
             if r == 4: set_cell_border(curr_cell, bottom={"sz": 24, "val": "single", "color": "000000"})
@@ -444,7 +450,6 @@ if 'res_data' not in st.session_state:
         "調/代課": pd.Series(dtype='str')
     })
 
-# 衝堂檢查器 A：檢查原始空堂是否已經被加過
 def check_source_conflict(df, teacher, date_val, period):
     if df.empty: return False
     date_str = pd.to_datetime(date_val).strftime('%Y-%m-%d')
@@ -452,7 +457,6 @@ def check_source_conflict(df, teacher, date_val, period):
     conflict = df[(df['老師'] == teacher) & (df_dates == date_str) & (df['節次'] == period)]
     return not conflict.empty
 
-# 衝堂檢查器 B：時空預知，檢查目標日調過去之後，自己會不會跟其他調來的課衝堂
 def check_destination_conflict(df, teacher, date_val, period):
     if df.empty: return False
     processed_df = process_swap_logic(df)
@@ -615,7 +619,6 @@ with tab_visual:
                         source_period_str = f"第 {st.session_state.source_period} 節"
                         target_period_str = f"第 {st.session_state.target_period} 節"
                         
-                        # 終極防護：衝堂檢查
                         if check_source_conflict(st.session_state.res_data, my_name, date_mine, source_period_str):
                             st.error(f"⚠️ 衝堂警告：您在 {date_mine} 的 {source_period_str} 已經加入過清單，請勿重複加入！")
                         elif check_source_conflict(st.session_state.res_data, st.session_state.target_teacher, date_target, target_period_str):
@@ -731,7 +734,6 @@ with tab_print:
 
     st.divider()
 
-    # 發放單位防呆機制
     if issue_unit.strip() == "ＯＯＯ老師":
         st.error("⚠️ 提醒：請在上方修改「發放單位」(預設為ＯＯＯ老師) 後，即可解鎖列印與下載功能。")
     else:
