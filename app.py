@@ -411,7 +411,7 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df):
     if df_raw.empty: return None
     
     df_raw["配對編號"] = df_raw["配對編號"].fillna("").astype(str).str.strip()
-    df_raw["班級"] = df_raw["班級"].fillna("班級").astype(str).str.strip()
+    df_raw["班級"] = df_raw["班級"].fillna("").astype(str).str.strip()
     df_raw["老師"] = df_raw["老師"].fillna("").astype(str).str.strip()
     df_processed = process_swap_logic(df_raw)
 
@@ -546,8 +546,8 @@ def render_jump_button():
     components.html(jump_html, height=55)
 
 # ================= 6. UI 版面佈局 =================
-# 【完美解法】：放棄所有 st 內建標題標籤，全部使用自訂 div 鎖死字體大小 (1.5rem)，保證手機不跑版且尺寸絕對一致
-st.markdown("<div style='font-size: 1.5rem; font-weight: bold; margin-bottom: 10px;'>🏫 正德調課小幫手</div>", unsafe_allow_html=True)
+# 【修改點】：全部統一改用原生 Markdown 的 H3 標籤 (###)，強制手機端渲染大小一致
+st.markdown("### 🏫 正德調課小幫手")
 
 col_top1, col_top2, col_top3 = st.columns([1, 2, 1])
 with col_top2:
@@ -573,10 +573,11 @@ with tab_swap:
         col_c1, col_c2 = st.columns([1, 1.2], gap="large")
         
         with col_c1:
-            st.markdown(f"<div style='font-size: 1.5rem; font-weight: bold; margin-bottom: 10px;'>📅 【{my_name}老師】的課表</div>", unsafe_allow_html=True)
+            st.markdown(f"### 📅 【{my_name}老師】的課表")
             
             advanced_mode = st.session_state.get("advanced_toggle", False)
             
+            # 使用卡片整合控制區
             with st.container(border=True):
                 if advanced_mode:
                     st.markdown("""
@@ -655,7 +656,7 @@ with tab_swap:
                 opt = all_swaps[st.session_state.uni_target_tb]
                 
                 if opt['direct']:
-                    st.markdown(f"<div style='font-size: 1.5rem; font-weight: bold; margin-bottom: 10px;'>👀 {opt['Teacher_B']}老師的課表變化</div>", unsafe_allow_html=True)
+                    st.markdown(f"### 👀 {opt['Teacher_B']}老師的課表變化")
                     grid_b = create_schedule_grid(df, opt['Teacher_B'])
                     grid_b.iloc[opt['Period_B'] - 1, day_en.index(opt['Day_B'])] = "" 
                     grid_b.iloc[st.session_state.uni_source_period - 1, day_en.index(st.session_state.uni_source_day_en)] = f"{st.session_state.uni_source_class}班\n{opt['Subject_X']}\u200b"
@@ -664,7 +665,7 @@ with tab_swap:
                     except AttributeError: st.dataframe(grid_b.style.applymap(style_target_grid), use_container_width=True, height=320)
                     
                     with st.container(border=True):
-                        st.markdown("<div style='font-size: 1.2rem; font-weight: bold; margin-bottom: 10px;'>📥 確認無誤，加入列印清單</div>", unsafe_allow_html=True)
+                        st.markdown("#### 📥 確認無誤，加入列印清單")
                         col_d1, col_d2, col_btn = st.columns([2, 2, 1.5])
                         day_b_zh = [k for k, v in day_map_rev.items() if v == opt['Day_B']][0]
                         with col_d1: date_mine = st.date_input(f"您的原上課日 ({st.session_state.uni_source_day_zh})", value=get_next_weekday(st.session_state.uni_source_day_zh), key="uni_d1")
@@ -698,7 +699,7 @@ with tab_swap:
                                     render_jump_button()
                             
                 elif advanced_mode:
-                    st.markdown("<div style='font-size: 1.3rem; font-weight: bold; margin-bottom: 5px;'>💡 請選擇協助的［橋樑］老師</div>", unsafe_allow_html=True)
+                    st.markdown("### 💡 請選擇協助的［橋樑］老師")
                     bridge_options = {}
                     for c in opt['chains']:
                         t_type = "跨班連鎖" if c['type'] == 'chain' else "三角調"
@@ -723,16 +724,16 @@ with tab_swap:
                         grid_c.iloc[c_data['Period_C'] - 1, day_en.index(c_data['Day_C'])] = "" 
                         grid_c.iloc[st.session_state.uni_source_period - 1, day_en.index(st.session_state.uni_source_day_en)] = f"{st.session_state.uni_source_class}班\n{c_data['Subject_W']}\u200b"
 
-                    st.markdown(f"<div style='font-size: 1.5rem; font-weight: bold; margin-top: 15px; margin-bottom: 10px;'>👀 {opt['Teacher_B']}老師的課表變化</div>", unsafe_allow_html=True)
+                    st.markdown(f"### 👀 {opt['Teacher_B']}老師的課表變化")
                     try: st.dataframe(grid_b.style.map(style_target_grid), use_container_width=True, height=320)
                     except AttributeError: st.dataframe(grid_b.style.applymap(style_target_grid), use_container_width=True, height=320)
 
-                    st.markdown(f"<div style='font-size: 1.5rem; font-weight: bold; margin-top: 15px; margin-bottom: 10px;'>👀 {c_data['Teacher_C']}老師的課表變化</div>", unsafe_allow_html=True)
+                    st.markdown(f"### 👀 {c_data['Teacher_C']}老師的課表變化")
                     try: st.dataframe(grid_c.style.map(style_target_grid), use_container_width=True, height=320)
                     except AttributeError: st.dataframe(grid_c.style.applymap(style_target_grid), use_container_width=True, height=320)
 
                     with st.container(border=True):
-                        st.markdown("<div style='font-size: 1.2rem; font-weight: bold; margin-bottom: 10px;'>📥 確認無誤，加入列印清單</div>", unsafe_allow_html=True)
+                        st.markdown("#### 📥 確認無誤，加入列印清單")
                         day_b_zh = [k for k, v in day_map_rev.items() if v == opt['Day_B']][0]
                         day_c_zh = [k for k, v in day_map_rev.items() if v == c_data['Day_C']][0]
                         
@@ -793,7 +794,7 @@ with tab_swap:
 # ----------------- Tab 2: 🖨️ 第二步：列印單據與輸出 -----------------
 with tab_print:
     with st.container(border=True):
-        st.markdown("<div style='font-size: 1.3rem; font-weight: bold; margin-bottom: 10px;'>⚙️ 單據表頭設定</div>", unsafe_allow_html=True)
+        st.markdown("### ⚙️ 單據表頭設定")
         c1, c2, c3 = st.columns(3)
         with c1: sch_year = st.text_input("學年度", value="114")
         with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
@@ -803,7 +804,7 @@ with tab_print:
     base_subs = ["", "國文", "英文", "數學", "生物", "理化", "地科", "地理", "歷史", "公民", "體育", "健康", "視藝", "表藝", "音樂", "家政", "童軍", "輔導", "資訊", "生科", "本土語"]
     subject_list = list(dict.fromkeys(base_subs + df_subs))
 
-    st.markdown("<div style='font-size: 1.5rem; font-weight: bold; margin-top: 15px; margin-bottom: 10px;'>📝 待列印清單編輯區</div>", unsafe_allow_html=True)
+    st.markdown("### 📝 待列印清單編輯區")
     
     if not st.session_state.res_data.empty:
         st.session_state.res_data["日期"] = pd.to_datetime(st.session_state.res_data["日期"], errors='coerce')
@@ -846,7 +847,7 @@ with tab_print:
                 st.rerun() 
             except Exception as e: st.error(f"❌ 檔案讀取失敗: {e}")
 
-    st.markdown("<div style='font-size: 1.5rem; font-weight: bold; margin-top: 15px; margin-bottom: 10px;'>🖨️ 列印與輸出</div>", unsafe_allow_html=True)
+    st.markdown("### 🖨️ 列印與輸出")
     with st.container(border=True):
         if issue_unit.strip() == "ＯＯＯ老師": st.error("⚠️ 提醒：請在上方修改「發放單位」(預設為ＯＯＯ老師) 後，即可解鎖列印與下載功能。")
         else:
