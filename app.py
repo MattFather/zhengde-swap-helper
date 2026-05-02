@@ -501,8 +501,9 @@ state_keys = [
     "target_teacher", "target_subject", "target_period", "target_day_en", "target_day_zh", "last_clicked_cell",
     "tri_last_user", "tri_source_class", "tri_source_subject", "tri_source_period", "tri_source_day_en", "tri_source_day_zh",
     "tri_target_period", "tri_target_day_en", "tri_target_day_zh", "tri_last_clicked_cell",
+    # 修正：跨班連鎖的參數設定
     "chain_source_class", "chain_source_subject", "chain_source_period", "chain_source_day_en", "chain_source_day_zh", 
-    "chain_last_clicked_cell", "chain_target_index"
+    "chain_last_clicked_cell", "chain_target_day_en", "chain_target_period"
 ]
 for key in state_keys:
     if key not in st.session_state: st.session_state[key] = None
@@ -559,7 +560,7 @@ day_map_rev = dict(zip(day_zh, day_en))
 # ================= 6. UI 版面佈局 =================
 st.title("🏫 正德調課小幫手 ＆ 列印整合系統")
 
-# 【修正點】：將選擇名字移到全域最上方，不管切換到哪個分頁都能選！
+# 【全域選單】
 all_teachers = sorted(df['Teacher'].dropna().unique())
 my_name = st.selectbox("🙋‍♂️ 請輸入您的名字：", all_teachers, index=None, placeholder="請選擇您的名字...")
 
@@ -982,7 +983,7 @@ with tab_chain:
     st.markdown("### 🧩 跨班連鎖調課 (創造空堂魔法)")
     pwd = st.text_input("🔒 進入開發者模式請輸入密碼：", type="password")
     
-    if pwd != "vu03g4":
+    if pwd != "000000":
         st.warning("此分頁為【跨班連鎖調課】實驗功能，請輸入密碼解鎖。")
     else:
         st.success("✅ 密碼正確，已進入開發者模式。")
@@ -998,10 +999,12 @@ with tab_chain:
                 orig_val = chain_my_grid.iloc[source_r, source_c]
                 chain_display_grid.iloc[source_r, source_c] = f"🔄[欲調走]\n{orig_val}"
                 
-                for i, chain in enumerate(chains):
-                    r = chain['Period_B'] - 1
-                    c = day_en.index(chain['Day_B'])
-                    chain_display_grid.iloc[r, c] = f"🌟連鎖方案 {i+1}"
+                # 【修正】：將相同 B 老師 (相同時段) 的方案歸為同一個格子，不顯示數字，只顯示 🌟選此方案
+                unique_b_slots = list(set([(c['Day_B'], c['Period_B']) for c in chains]))
+                for d_b, p_b in unique_b_slots:
+                    r = p_b - 1
+                    c = day_en.index(d_b)
+                    chain_display_grid.iloc[r, c] = f"🌟選此方案"
             
             col_c1, col_c2 = st.columns([1, 1.2], gap="large")
             
@@ -1031,7 +1034,9 @@ with tab_chain:
                         if st.session_state.chain_last_clicked_cell != clicked_id:
                             r_idx = t_period - 1
                             orig_content = chain_my_grid.iloc[r_idx, c_idx]
+                            
                             if orig_content != "":
+                                # 點擊的是有課的格子 -> 選為 source
                                 match_data = df[(df['Teacher'] == my_name) & (df['Day'] == t_day_en) & (df['Period'] == t_period)]
                                 if not match_data.empty:
                                     st.session_state.chain_source_class = match_data.iloc[0]['Class']
@@ -1039,39 +1044,59 @@ with tab_chain:
                                     st.session_state.chain_source_period = t_period
                                     st.session_state.chain_source_day_en = t_day_en
                                     st.session_state.chain_source_day_zh = t_day_zh
-                                    st.session_state.chain_target_index = None
+                                    st.session_state.chain_target_day_en = None
+                                    st.session_state.chain_target_period = None
                                     st.session_state.chain_last_clicked_cell = clicked_id
                                     st.rerun()
                             else:
-                                if st.session_state.chain_source_class and "🌟連鎖方案" in str(chain_display_grid.iloc[r_idx, c_idx]):
-                                    val_str = str(chain_display_grid.iloc[r_idx, c_idx])
-                                    idx_str = val_str.replace("🌟連鎖方案 ", "")
-                                    st.session_state.chain_target_index = int(idx_str) - 1
+                                # 點擊的是空堂 -> 確認是否為 🌟選此方案
+                                if st.session_state.chain_source_class and "🌟選此方案" in str(chain_display_grid.iloc[r_idx, c_idx]):
+                                    st.session_state.chain_target_day_en = t_day_en
+                                    st.session_state.chain_target_period = t_period
                                     st.session_state.chain_last_clicked_cell = clicked_id
                                     st.rerun()
                     except Exception: pass
                 else: st.session_state.chain_last_clicked_cell = None
 
             with col_c2:
-                if st.session_state.chain_target_index is not None:
+                if st.session_state.chain_target_period is not None:
                     chains = find_chain_swaps(df, my_name, st.session_state.chain_source_class, st.session_state.chain_source_day_en, st.session_state.chain_source_period)
-                    if chains and st.session_state.chain_target_index < len(chains):
-                        c_data = chains[st.session_state.chain_target_index]
+                    # 篩選出符合點擊格子(B老師時段)的連鎖方案
+                    valid_chains = [c for c in chains if c['Day_B'] == st.session_state.chain_target_day_en and c['Period_B'] == st.session_state.chain_target_period]
+                    
+                    if valid_chains:
+                        base_c = valid_chains[0] # 第一階段資訊都一樣，取第一個就好
+                        day_b_zh = [k for k, v in day_map_rev.items() if v == base_c['Day_B']][0]
                         
                         st.subheader("💡 跨班連鎖調課解析")
-                        day_b_zh = [k for k, v in day_map_rev.items() if v == c_data['Day_B']][0]
-                        day_c_zh = [k for k, v in day_map_rev.items() if v == c_data['Day_C']][0]
                         
+                        # 第一階段固定顯示
                         st.markdown(f"""
                         <div style="background-color: #f0f8ff; padding: 15px; border-radius: 5px;">
                             <h4 style="color: #0066cc;">第一階段：{st.session_state.chain_source_class}班 的交換</h4>
                             <ul>
-                                <li>您 去上：<b>{day_b_zh} 第 {c_data['Period_B']} 節</b> ({c_data['Teacher_B']}老師 原本的課)</li>
-                                <li><b>{c_data['Teacher_B']}老師</b> 必須來上：您的 <b>{st.session_state.chain_source_day_zh} 第 {st.session_state.chain_source_period} 節</b></li>
+                                <li>您 去上：<b>{day_b_zh} 第 {base_c['Period_B']} 節</b> ({base_c['Teacher_B']}老師 原本的課)</li>
+                                <li><b>{base_c['Teacher_B']}老師</b> 必須來上：您的 <b>{st.session_state.chain_source_day_zh} 第 {st.session_state.chain_source_period} 節</b></li>
                             </ul>
-                            <div style="color: #d9534f; font-weight:bold;">⚠️ 問題點：{c_data['Teacher_B']}老師 這個時間卡了 {c_data['Class_W']}班 的課！</div>
+                            <div style="color: #d9534f; font-weight:bold;">⚠️ 問題點：{base_c['Teacher_B']}老師 這個時間卡了 {base_c['Class_W']}班 的課！</div>
                         </div>
-                        <br>
+                        """, unsafe_allow_html=True)
+                        
+                        st.markdown("<br>", unsafe_allow_html=True)
+                        
+                        # 【修正】：讓使用者選擇多個可能的解救者 (C老師)
+                        bridge_options = {}
+                        for c in valid_chains:
+                            d_c_zh = [k for k, v in day_map_rev.items() if v == c['Day_C']][0]
+                            label = f"{c['Teacher_C']}老師 (去上他原本 {d_c_zh} 第{c['Period_C']}節 的課)"
+                            bridge_options[label] = c
+                            
+                        selected_bridge = st.selectbox("🎯 系統找到多位老師可幫忙，請選擇第二階段的解救者 (C老師)：", list(bridge_options.keys()))
+                        c_data = bridge_options[selected_bridge]
+                        day_c_zh = [k for k, v in day_map_rev.items() if v == c_data['Day_C']][0]
+
+                        # 根據選擇的C老師顯示第二階段
+                        st.markdown(f"""
                         <div style="background-color: #fff3e6; padding: 15px; border-radius: 5px;">
                             <h4 style="color: #cc6600;">第二階段：解救 {c_data['Teacher_B']}老師 的 {c_data['Class_W']}班</h4>
                             <ul>
@@ -1110,4 +1135,4 @@ with tab_chain:
                             st.session_state.res_data = pd.concat([st.session_state.res_data, group1, group2], ignore_index=True)
                             st.success("✅ 兩組連動調課單已經生成完畢，請至第二步查看！")
         else:
-            st.info("請先在上方選擇您的名字。")
+            st.info("請先在最上方選擇您的名字。")
