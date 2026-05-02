@@ -559,7 +559,6 @@ if my_name and my_name != st.session_state.last_user_name:
 
 st.markdown("---")
 
-# 【順序調整】：將列印區放到最後執行，解決資料顯示的時間差 Bug
 tab_visual, tab_unified, tab_print = st.tabs(["🔄 第一步：一般調課區", "🚧 終極整合模式 (開發中)", "🖨️ 第二步：列印單據與輸出"])
 
 # ----------------- Tab 1: 第一步：一般調課區 -----------------
@@ -704,7 +703,8 @@ with tab_unified:
             
             with col_c1:
                 st.subheader("📅 第一步：選擇要調走的課")
-                st.info("系統將一次掃描找出 **所有可以直接互換或需要第三人解救的方案**。")
+                # 【修改2】：精簡操作提示文字
+                st.info("選擇你想調動的時段\n\n**🌟互**：兩人互調\n\n**🔗多**：跨班連鎖或三角調")
                 
                 try: styled_uni_grid = uni_display_grid.style.map(style_my_grid)
                 except AttributeError: styled_uni_grid = uni_display_grid.style.applymap(style_my_grid)
@@ -796,7 +796,8 @@ with tab_unified:
                             label = f"[{t_type}] {c['Teacher_C']}老師"
                             bridge_options[label] = c
                             
-                        selected_bridge = st.selectbox("請由下方選單挑選解救者：", list(bridge_options.keys()))
+                        # 【修改1】：隱藏選擇框標題
+                        selected_bridge = st.selectbox("橋樑老師選項", list(bridge_options.keys()), label_visibility="collapsed")
                         c_data = bridge_options[selected_bridge]
                         
                         grid_b = create_schedule_grid(df, opt['Teacher_B'])
