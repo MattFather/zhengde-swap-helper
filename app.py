@@ -603,7 +603,7 @@ with tab_swap:
                 if advanced_mode:
                     st.markdown("""
                         🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟</b></span> 或 <span style="color: #e67e22;"><b>🔗老師名字</b></span> 選擇對象。<br><br>
-                        <span style="color: #0066cc;"><b>🌟互</b></span>：兩人互調|<span style="color: #e67e22;"><b>🔗多</b></span>：跨班連鎖或三角調
+                        <span style="color: #0066cc;"><b>🌟互</b></span>：兩人互調 | <span style="color: #e67e22;"><b>🔗多</b></span>：跨班連鎖或三角調
                     """, unsafe_allow_html=True)
                 else:
                     st.markdown("""
