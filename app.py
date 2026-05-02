@@ -14,6 +14,7 @@ import tempfile
 import os
 import streamlit.components.v1 as components
 import base64
+import requests # <--- 串接 Google Sheets 的套件
 
 # ================= 1. 頁面基本設定與 JS 快捷鍵 =================
 st.set_page_config(
@@ -551,14 +552,14 @@ st.markdown("""
 <style>
 /* ================= 自訂字體大小控制區 ================= */
 .main-title {
-    font-size: 40px !important;  /* 這裡控制「正德調課小幫手」的大小 */
+    font-size: 40px !important;  
     font-weight: 900 !important;
     line-height: 1.3 !important;
     margin-bottom: 15px !important;
     color: inherit !important;
 }
 .sub-title {
-    font-size: 28px !important;  /* 這裡控制「課表/其他副標題」的大小 */
+    font-size: 28px !important;  
     font-weight: 900 !important;
     line-height: 1.3 !important;
     margin-bottom: 15px !important;
@@ -579,15 +580,17 @@ if my_name and my_name != st.session_state.last_user_name:
     for k in state_keys: 
         st.session_state[k] = None
     st.session_state.last_user_name = my_name
+
+    # ==============================================================
+    # 🌟 這裡就是向 Google Sheets 發送資料的魔法！
+    # ==============================================================
+    API_URL = "https://script.google.com/macros/s/AKfycbzlk8-pGvH1S83NWfQ3ThHaLNYjTksmu81-liK0MvouHhh_FV0ZpiotOMZAgKSPNk50rw/exec"
     
-    # --- 後台默默記錄使用軌跡 ---
     try:
-        with open("backend_usage_log.txt", "a", encoding="utf-8") as log_f:
-            current_time = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            log_f.write(f"[{current_time}] 老師登入: {my_name}\n")
+        # 使用 requests 在背景偷偷發送資料 (不會卡住網頁)
+        requests.post(API_URL, data={"name": my_name}, timeout=2)
     except Exception:
-        pass
-    # ----------------------------
+        pass # 如果網路問題傳送失敗，就偷偷忽略，不影響老師使用
 
 st.markdown("---")
 
