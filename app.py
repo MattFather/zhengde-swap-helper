@@ -555,18 +555,42 @@ day_zh = ['星期一', '星期二', '星期三', '星期四', '星期五']
 day_map_rev = dict(zip(day_zh, day_en))
 
 def render_jump_button():
-    jump_html = '''
-    <button onclick="
-        var tabs = window.parent.document.querySelectorAll('button[data-baseweb=&quot;tab&quot;]');
-        if(tabs.length > 1){
-            tabs[1].click();
-            window.parent.scrollTo({top: 0, behavior: 'smooth'});
-        }
-    " style="width: 100%; padding: 0.8rem; background-color: #28a745; color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 1.1rem; font-weight: bold; margin-top: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: opacity 0.3s;">
-        👉 點此跳轉至【🖨️ 第二步：列印單據與輸出】
-    </button>
-    '''
-    st.markdown(jump_html, unsafe_allow_html=True)
+    jump_html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    body { margin: 0; padding: 0; font-family: sans-serif; }
+    .jump-btn {
+        width: 100%; 
+        padding: 0.8rem; 
+        background-color: #28a745; 
+        color: white; 
+        border: none; 
+        border-radius: 0.5rem; 
+        cursor: pointer; 
+        font-size: 1.1rem; 
+        font-weight: bold; 
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+        transition: opacity 0.3s;
+    }
+    .jump-btn:hover { opacity: 0.8; }
+    </style>
+    </head>
+    <body>
+        <button class="jump-btn" onclick="
+            const tabs = window.parent.document.querySelectorAll('button[data-baseweb=\\'tab\\']');
+            if(tabs.length > 1){
+                tabs[1].click();
+                window.parent.scrollTo({top: 0, behavior: 'smooth'});
+            }
+        ">
+            👉 點此跳轉至【🖨️ 第二步：列印單據與輸出】
+        </button>
+    </body>
+    </html>
+    """
+    components.html(jump_html, height=60)
 
 # ================= 6. UI 版面佈局 =================
 st.title("🏫 正德調課小幫手 ＆ 列印整合系統")
@@ -702,8 +726,11 @@ with tab_swap:
                                 st.error(f"⚠️ 衝堂警告：您 在 {date_mine} {p_m_str} 的課已加入過清單！"); conflict = True
                             elif check_source_conflict(st.session_state.res_data, opt['Teacher_B'], date_target, p_t_str):
                                 st.error(f"⚠️ 衝堂警告：{opt['Teacher_B']}老師 在 {date_target} {p_t_str} 的課已加入過清單！"); conflict = True
+                            elif check_destination_conflict(st.session_state.res_data, my_name, date_target, p_t_str):
+                                st.error(f"⚠️ 目標衝堂：您 在 {date_target} {p_t_str} 已有調入的課程！"); conflict = True
+                            elif check_destination_conflict(st.session_state.res_data, opt['Teacher_B'], date_mine, p_m_str):
+                                st.error(f"⚠️ 目標衝堂：{opt['Teacher_B']}老師 在 {date_mine} {p_m_str} 已有調入的課程！"); conflict = True
                             
-                            # 【修正點：這裡的變數名稱修正為 uni_source_class 等，避免報錯】
                             if not conflict:
                                 current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
                                 next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
