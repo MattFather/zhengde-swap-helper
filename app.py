@@ -551,7 +551,7 @@ def render_jump_button():
 st.markdown("""
 <style>
 .my-super-title {
-    font-size: 28px !important;
+    font-size: 60px !important;
     font-weight: 900 !important;
     line-height: 1.3 !important;
     margin-bottom: 15px !important;
