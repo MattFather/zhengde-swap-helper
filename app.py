@@ -546,7 +546,7 @@ def render_jump_button():
     components.html(jump_html, height=55)
 
 # ================= 6. UI 版面佈局 =================
-# 【修改點】：使用系統原生的 subheader 讓字體大小完美一致
+# 【修改點】：讓主標題直接使用 st.subheader，與課表標題完全同級同尺寸
 st.subheader("🏫 正德調課小幫手")
 
 col_top1, col_top2, col_top3 = st.columns([1, 2, 1])
@@ -555,8 +555,7 @@ with col_top2:
     my_name = st.selectbox("🙋‍♂️ 請選擇您的名字：", all_teachers, index=None, placeholder="請選擇...")
 
 if my_name and my_name != st.session_state.last_user_name:
-    for k in state_keys: 
-        st.session_state[k] = None
+    for k in state_keys: st.session_state[k] = None
     st.session_state.last_user_name = my_name
 
 st.markdown("---")
@@ -679,13 +678,13 @@ with tab_swap:
                                 
                                 conflict = False
                                 if check_source_conflict(st.session_state.res_data, my_name, date_mine, p_m_str):
-                                    st.error(f"⚠️ 衝堂警告：您 在 {date_mine} {p_m_str} 已有課！"); conflict = True
+                                    st.error(f"⚠️ 衝堂：您 在 {date_mine} {p_m_str} 已有課！"); conflict = True
                                 elif check_source_conflict(st.session_state.res_data, opt['Teacher_B'], date_target, p_t_str):
-                                    st.error(f"⚠️ 衝堂警告：{opt['Teacher_B']}老師 在 {date_target} {p_t_str} 已有課！"); conflict = True
+                                    st.error(f"⚠️ 衝堂：{opt['Teacher_B']}老師 在 {date_target} {p_t_str} 已有課！"); conflict = True
                                 elif check_destination_conflict(st.session_state.res_data, my_name, date_target, p_t_str):
-                                    st.error(f"⚠️ 目標衝堂：您 在 {date_target} {p_t_str} 已有課！"); conflict = True
+                                    st.error(f"⚠️ 衝堂：您 在 {date_target} {p_t_str} 已有課！"); conflict = True
                                 elif check_destination_conflict(st.session_state.res_data, opt['Teacher_B'], date_mine, p_m_str):
-                                    st.error(f"⚠️ 目標衝堂：{opt['Teacher_B']}老師 在 {date_mine} {p_m_str} 已有課！"); conflict = True
+                                    st.error(f"⚠️ 衝堂：{opt['Teacher_B']}老師 在 {date_mine} {p_m_str} 已有課！"); conflict = True
                                 
                                 if not conflict:
                                     current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
