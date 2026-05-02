@@ -92,7 +92,6 @@ def find_triangle_swaps(df, my_name, target_class, my_day, my_period):
             })
     return results
 
-# 終極整合演算法：一次算出某堂課的所有可能解法 (直接、連鎖、三角)
 def find_all_swaps(df, my_name, target_class, my_day, my_period):
     options = {}
     class_x_schedule = df[df['Class'] == target_class]
@@ -105,7 +104,6 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
 
         if teacher_b == my_name: continue
 
-        # 您必須在B老師的時段有空
         if not df[(df['Teacher'] == my_name) & (df['Day'] == day_b) & (df['Period'] == period_b)].empty: continue
 
         tb_key = f"{day_b}_{period_b}"
@@ -115,18 +113,14 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
                 "Subject_X": subject_x, "direct": False, "chains": []
             }
 
-        # 檢查B老師在您的時段是否有空
         b_conflict = df[(df['Teacher'] == teacher_b) & (df['Day'] == my_day) & (df['Period'] == my_period)]
 
         if b_conflict.empty:
-            # 對方有空 -> 直接互換
             options[tb_key]["direct"] = True
         else:
-            # 對方沒空 -> 尋找第三人 (連鎖/三角)
             class_w = b_conflict.iloc[0]['Class']
             subject_w = b_conflict.iloc[0]['Subject']
 
-            # 1. 跨班連鎖 (B把W班給C)
             if class_w != target_class:
                 for _, row_c in df[df['Class'] == class_w].iterrows():
                     teacher_c = row_c['Teacher']
@@ -142,7 +136,6 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
                         "Class_W": class_w, "Subject_W": subject_w, "Subject_C_W": row_c['Subject'] 
                     })
 
-            # 2. 三角調 (B把原本要接您的X班丟給C)
             for _, row_c in df[df['Class'] == target_class].iterrows():
                 teacher_c = row_c['Teacher']
                 day_c = row_c['Day']
@@ -157,9 +150,7 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
                     "Class_W": target_class, "Subject_W": row_c['Subject'] 
                 })
 
-    # 過濾掉完全沒解法的選項
     return {k: v for k, v in options.items() if v["direct"] or v["chains"]}
-
 
 def create_schedule_grid(df, teacher_name):
     t_df = df[df['Teacher'] == teacher_name].copy()
@@ -694,6 +685,11 @@ with tab_swap:
                                 st.error(f"⚠️ 衝堂警告：您 在 {date_mine} {p_m_str} 的課已加入過清單！"); conflict = True
                             elif check_source_conflict(st.session_state.res_data, opt['Teacher_B'], date_target, p_t_str):
                                 st.error(f"⚠️ 衝堂警告：{opt['Teacher_B']}老師 在 {date_target} {p_t_str} 的課已加入過清單！"); conflict = True
+                            # 加入目標衝堂檢查
+                            elif check_destination_conflict(st.session_state.res_data, my_name, date_target, p_t_str):
+                                st.error(f"⚠️ 目標衝堂：您 在 {date_target} {p_t_str} 已有調入的課程！"); conflict = True
+                            elif check_destination_conflict(st.session_state.res_data, opt['Teacher_B'], date_mine, p_m_str):
+                                st.error(f"⚠️ 目標衝堂：{opt['Teacher_B']}老師 在 {date_mine} {p_m_str} 已有調入的課程！"); conflict = True
                             
                             if not conflict:
                                 current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
@@ -767,6 +763,13 @@ with tab_swap:
                             st.error(f"⚠️ 衝堂警告：{opt['Teacher_B']}老師 在 {date_b} {p_b_str} 的課已加入過清單！"); conflict = True
                         elif check_source_conflict(st.session_state.res_data, c_data['Teacher_C'], date_c, p_c_str):
                             st.error(f"⚠️ 衝堂警告：{c_data['Teacher_C']}老師 在 {date_c} {p_c_str} 的課已加入過清單！"); conflict = True
+                        # 加入目標衝堂檢查
+                        elif check_destination_conflict(st.session_state.res_data, my_name, date_b, p_b_str):
+                            st.error(f"⚠️ 目標衝堂：您 在 {date_b} {p_b_str} 已有調入的課程！"); conflict = True
+                        elif check_destination_conflict(st.session_state.res_data, opt['Teacher_B'], date_c, p_c_str):
+                            st.error(f"⚠️ 目標衝堂：{opt['Teacher_B']}老師 在 {date_c} {p_c_str} 已有調入的課程！"); conflict = True
+                        elif check_destination_conflict(st.session_state.res_data, c_data['Teacher_C'], date_mine, p_mine_str):
+                            st.error(f"⚠️ 目標衝堂：{c_data['Teacher_C']}老師 在 {date_mine} {p_mine_str} 已有調入的課程！"); conflict = True
 
                         if not conflict:
                             current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
