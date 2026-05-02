@@ -117,11 +117,7 @@ def find_triangle_swaps(df, my_name, target_class, my_day, my_period):
             })
     return results
 
-# --- 新增：跨班連鎖調課 (創造空堂) 演算法 ---
 def find_chain_swaps(df, my_name, target_class, my_day, my_period):
-    """
-    目標：A想換X班的課給B。但B在該時段正在上W班。所以B要把W班的課換給C，清出空堂。
-    """
     class_x_schedule = df[df['Class'] == target_class]
     results = []
     
@@ -133,24 +129,19 @@ def find_chain_swaps(df, my_name, target_class, my_day, my_period):
         
         if teacher_b == my_name: continue
         
-        # 條件1：A 在 B 的 X班時段 必須有空
         if not df[(df['Teacher'] == my_name) & (df['Day'] == day_b) & (df['Period'] == period_b)].empty:
             continue
             
-        # 尋找 B 在 A的時段(my_day, my_period) 是否卡了別的課
         b_conflict = df[(df['Teacher'] == teacher_b) & (df['Day'] == my_day) & (df['Period'] == my_period)]
         
         if b_conflict.empty:
-            # B 是空的，這是一般調課，這裡略過，專注尋找「需要創造空堂」的組合
             continue
             
         class_w = b_conflict.iloc[0]['Class']
         subject_b_w = b_conflict.iloc[0]['Subject']
         
-        # 條件2：B 卡住的課必須不是 X班 (如果是X班，邏輯上會被一般調課處理)
         if class_w == target_class: continue
         
-        # 進入第二階段：為 B 尋找 C 來接手 W班
         class_w_schedule = df[df['Class'] == class_w]
         for _, row_c in class_w_schedule.iterrows():
             teacher_c = row_c['Teacher']
@@ -160,15 +151,12 @@ def find_chain_swaps(df, my_name, target_class, my_day, my_period):
             
             if teacher_c == teacher_b or teacher_c == my_name: continue
             
-            # 條件3：B 必須在 C 的 W班時段有空，才能接 C 的課
             if not df[(df['Teacher'] == teacher_b) & (df['Day'] == day_c) & (df['Period'] == period_c)].empty:
                 continue
                 
-            # 條件4：C 必須在 A 的時段(my_day, my_period)有空，才能接 B 原本卡住的 W班
             if not df[(df['Teacher'] == teacher_c) & (df['Day'] == my_day) & (df['Period'] == my_period)].empty:
                 continue
                 
-            # 完美連鎖達成！
             results.append({
                 "Teacher_B": teacher_b, "Day_B": day_b, "Period_B": period_b, "Subject_B_X": subject_b_x,
                 "Class_W": class_w, "Subject_B_W": subject_b_w,
@@ -198,7 +186,7 @@ def get_next_weekday(day_zh):
     if days_ahead <= 0: days_ahead += 7
     return today + datetime.timedelta(days_ahead)
 
-# ================= 4. 列印系統演算法 (省略部分內部細節保持原樣) =================
+# ================= 4. 列印系統演算法 =================
 def docx_to_pdf(docx_bytes):
     with tempfile.TemporaryDirectory() as tmpdir:
         docx_path = os.path.join(tmpdir, "temp.docx")
@@ -507,14 +495,12 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df):
     doc.save(bio)
     return bio.getvalue()
 
-
 # ================= 5. 系統狀態記憶與初始化 =================
 state_keys = [
     "last_user_name", "source_class", "source_subject", "source_period", "source_day_en", "source_day_zh", 
     "target_teacher", "target_subject", "target_period", "target_day_en", "target_day_zh", "last_clicked_cell",
     "tri_last_user", "tri_source_class", "tri_source_subject", "tri_source_period", "tri_source_day_en", "tri_source_day_zh",
     "tri_target_period", "tri_target_day_en", "tri_target_day_zh", "tri_last_clicked_cell",
-    # 新增跨班連動參數
     "chain_source_class", "chain_source_subject", "chain_source_period", "chain_source_day_en", "chain_source_day_zh", 
     "chain_last_clicked_cell", "chain_target_index"
 ]
@@ -573,21 +559,21 @@ day_map_rev = dict(zip(day_zh, day_en))
 # ================= 6. UI 版面佈局 =================
 st.title("🏫 正德調課小幫手 ＆ 列印整合系統")
 
-# 新增第三個分頁
+# 【修正點】：將選擇名字移到全域最上方，不管切換到哪個分頁都能選！
+all_teachers = sorted(df['Teacher'].dropna().unique())
+my_name = st.selectbox("🙋‍♂️ 請輸入您的名字：", all_teachers, index=None, placeholder="請選擇您的名字...")
+
+if my_name and my_name != st.session_state.last_user_name:
+    for k in state_keys: st.session_state[k] = None
+    st.session_state.last_user_name = my_name
+
+st.markdown("---")
+
 tab_visual, tab_print, tab_chain = st.tabs(["🔄 第一步：選擇調課老師", "🖨️ 第二步：列印單據與輸出", "🚧 新模式開發中，暫不開放"])
 
 # ----------------- Tab 1: 第一步：選擇調課老師 -----------------
 with tab_visual:
-    all_teachers = sorted(df['Teacher'].dropna().unique())
-    my_name = st.selectbox("🙋‍♂️ 請輸入您的名字：", all_teachers, index=None, placeholder="請選擇您的名字...")
-    
-    st.markdown("---")
-
     if my_name:
-        if my_name != st.session_state.last_user_name:
-            for k in state_keys: st.session_state[k] = None
-            st.session_state.last_user_name = my_name
-
         original_my_grid = create_schedule_grid(df, my_name)
         display_grid = original_my_grid.copy()
 
@@ -876,7 +862,7 @@ with tab_visual:
             elif st.session_state.tri_source_class: st.info("👈 請在左側點擊 🔺[選此時段] 標記來選擇您想去的空堂。")
             else: st.info("👈 準備好了嗎？請先在左側課表點選一堂您想調走的課。")
     else:
-        st.info("👋 歡迎！請先選擇您的名字以顯示課表。")
+        st.info("👋 歡迎！請先在上方選擇您的名字以顯示課表。")
 
 # ----------------- Tab 2: 🖨️ 第二步：列印單據與輸出 -----------------
 with tab_print:
@@ -991,13 +977,12 @@ with tab_print:
                         else:
                             st.error("❌ 轉換失敗，伺服器過度繁忙或缺少套件。")
 
-
 # ----------------- Tab 3: 🚧 新模式開發中，暫不開放 (跨班連鎖調課) -----------------
 with tab_chain:
     st.markdown("### 🧩 跨班連鎖調課 (創造空堂魔法)")
     pwd = st.text_input("🔒 進入開發者模式請輸入密碼：", type="password")
     
-    if pwd != "0000":
+    if pwd != "vu03g4":
         st.warning("此分頁為【跨班連鎖調課】實驗功能，請輸入密碼解鎖。")
     else:
         st.success("✅ 密碼正確，已進入開發者模式。")
@@ -1013,7 +998,6 @@ with tab_chain:
                 orig_val = chain_my_grid.iloc[source_r, source_c]
                 chain_display_grid.iloc[source_r, source_c] = f"🔄[欲調走]\n{orig_val}"
                 
-                # 將找到的連鎖方案標記在畫面上 (顯示B老師)
                 for i, chain in enumerate(chains):
                     r = chain['Period_B'] - 1
                     c = day_en.index(chain['Day_B'])
@@ -1060,7 +1044,6 @@ with tab_chain:
                                     st.rerun()
                             else:
                                 if st.session_state.chain_source_class and "🌟連鎖方案" in str(chain_display_grid.iloc[r_idx, c_idx]):
-                                    # 提取方案索引
                                     val_str = str(chain_display_grid.iloc[r_idx, c_idx])
                                     idx_str = val_str.replace("🌟連鎖方案 ", "")
                                     st.session_state.chain_target_index = int(idx_str) - 1
@@ -1100,14 +1083,13 @@ with tab_chain:
                         """, unsafe_allow_html=True)
 
                         st.markdown("### 📥 將這兩組配對加入列印清單")
-                        # 讓使用者選擇這三個日期的實際 Date
                         col_date1, col_date2, col_date3 = st.columns(3)
                         with col_date1: date_mine = st.date_input(f"您的原上課日 ({st.session_state.chain_source_day_zh})", value=get_next_weekday(st.session_state.chain_source_day_zh), key="chain_d1")
                         with col_date2: date_b = st.date_input(f"{c_data['Teacher_B']} 原上課日 ({day_b_zh})", value=get_next_weekday(day_b_zh), key="chain_d2")
                         with col_date3: date_c = st.date_input(f"{c_data['Teacher_C']} 原上課日 ({day_c_zh})", value=get_next_weekday(day_c_zh), key="chain_d3")
 
                         if st.button("➕ 連鎖方案 一鍵加入 (共4筆資料)", type="primary", use_container_width=True):
-                            current_ids = pd.to_numeric(st.session_state.res_data["配鎖編號"], errors='coerce').dropna() if "配對編號" in st.session_state.res_data.columns else pd.Series(dtype='float')
+                            current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna() if "配對編號" in st.session_state.res_data.columns else pd.Series(dtype='float')
                             next_id_1 = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
                             next_id_2 = str(int(current_ids.max() + 2)) if not current_ids.empty else "2"
                             
@@ -1115,13 +1097,11 @@ with tab_chain:
                             p_b_str = f"第 {c_data['Period_B']} 節"
                             p_c_str = f"第 {c_data['Period_C']} 節"
                             
-                            # 建立第一組：A 與 B 調 X班
                             group1 = pd.DataFrame([
                                 {"勾選列印資料": True, "配對編號": next_id_1, "班級": st.session_state.chain_source_class, "日期": pd.to_datetime(date_mine), "節次": p_mine_str, "科目": str(st.session_state.chain_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
                                 {"勾選列印資料": True, "配對編號": next_id_1, "班級": st.session_state.chain_source_class, "日期": pd.to_datetime(date_b), "節次": p_b_str, "科目": str(c_data['Subject_B_X']).strip(), "老師": c_data['Teacher_B'], "調/代課": "調課"}
                             ])
                             
-                            # 建立第二組：B 與 C 調 W班
                             group2 = pd.DataFrame([
                                 {"勾選列印資料": True, "配對編號": next_id_2, "班級": c_data['Class_W'], "日期": pd.to_datetime(date_mine), "節次": p_mine_str, "科目": str(c_data['Subject_B_W']).strip(), "老師": c_data['Teacher_B'], "調/代課": "調課"},
                                 {"勾選列印資料": True, "配對編號": next_id_2, "班級": c_data['Class_W'], "日期": pd.to_datetime(date_c), "節次": p_c_str, "科目": str(c_data['Subject_C_W']).strip(), "老師": c_data['Teacher_C'], "調/代課": "調課"}
@@ -1130,4 +1110,4 @@ with tab_chain:
                             st.session_state.res_data = pd.concat([st.session_state.res_data, group1, group2], ignore_index=True)
                             st.success("✅ 兩組連動調課單已經生成完畢，請至第二步查看！")
         else:
-            st.info("請先在第一步選擇您的名字。")
+            st.info("請先在上方選擇您的名字。")
