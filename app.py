@@ -530,27 +530,26 @@ def check_destination_conflict(df, teacher, date_val, period):
     conflict = processed_df[(processed_df['老師'] == teacher) & (p_dates == date_str) & (processed_df['節次'] == period) & (processed_df['調/代課'] != '空堂X')]
     return not conflict.empty
 
-# 【修改點】：使用莫蘭迪灰藍底色取代沉重的黑色，提升閱讀舒適度
 def style_my_grid(val):
     val_str = str(val)
     if "🔄" in val_str: 
-        return "color: #ffffff; font-weight: bold; background-color: #d9534f;" # 紅底白字標示正在調動的課
+        return "color: #ffffff; font-weight: bold; background-color: #d9534f;" 
     elif "🌟互" in val_str: 
-        return "color: #0066cc; font-weight: normal; background-color: transparent;" # 淺藍字無底色
+        return "color: #0066cc; font-weight: normal; background-color: transparent;" 
     elif "🔗多" in val_str: 
-        return "color: #e67e22; font-weight: normal; background-color: transparent;" # 淺橘字無底色
+        return "color: #e67e22; font-weight: normal; background-color: transparent;" 
     elif "🌟" in val_str: 
-        return "color: #0066cc; font-weight: normal; background-color: transparent;" # 淺藍字無底色
+        return "color: #0066cc; font-weight: normal; background-color: transparent;" 
     elif "班" in val_str:
-        return "color: #2c3e50; font-weight: bold; background-color: #e2e8f0;" # 溫和的莫蘭迪灰藍底色配深色字
+        return "color: #2c3e50; font-weight: bold; background-color: #e2e8f0;" 
     return ""
 
 def style_target_grid(val):
     val_str = str(val)
     if '\u200b' in val_str: 
-        return "color: #ffffff; font-weight: bold; background-color: #d9534f;" # 新入的課也用紅底白字
+        return "color: #ffffff; font-weight: bold; background-color: #d9534f;" 
     elif "班" in val_str:
-        return "color: #2c3e50; font-weight: bold; background-color: #e2e8f0;" # 對方的課表也使用灰藍底色
+        return "color: #2c3e50; font-weight: bold; background-color: #e2e8f0;" 
     return ""
 
 day_en = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
@@ -560,7 +559,6 @@ day_map_rev = dict(zip(day_zh, day_en))
 # ================= 6. UI 版面佈局 =================
 st.title("🏫 正德調課小幫手 ＆ 列印整合系統")
 
-# 【全域選單】
 all_teachers = sorted(df['Teacher'].dropna().unique())
 my_name = st.selectbox("🙋‍♂️ 請輸入您的名字：", all_teachers, index=None, placeholder="請選擇您的名字...")
 
@@ -570,7 +568,7 @@ if my_name and my_name != st.session_state.last_user_name:
 
 st.markdown("---")
 
-tab_visual, tab_unified, tab_print = st.tabs(["🔄 第一步：一般調課區", "🚧 終極整合模式 (開發中)", "🖨️ 第二步：列印單據與輸出"])
+tab_visual, tab_unified, tab_print = st.tabs(["🔄 第一步：一般調課區", "🚧 智慧調課模式", "🖨️ 第二步：列印單據與輸出"])
 
 # ----------------- Tab 1: 第一步：一般調課區 -----------------
 with tab_visual:
@@ -687,7 +685,7 @@ with tab_unified:
     if pwd != "0000":
         st.warning("此分頁為【三合一整合模式】實驗功能，請輸入密碼解鎖。")
     else:
-        st.success("✅ 密碼正確，已啟動終極整合模式。")
+        st.success("✅ 密碼正確，已啟動智慧調課模式。")
         
         if my_name:
             all_swaps = {}
@@ -697,8 +695,9 @@ with tab_unified:
             col_c1, col_c2 = st.columns([1, 1.2], gap="large")
             
             with col_c1:
-                st.subheader("📅 第一步：選擇要調走的課")
-                advanced_mode = st.toggle("🚀 一鍵解鎖進階多角調 (跨班連鎖/三角調)", value=False)
+                st.subheader(f"📅 【{my_name}老師】的課表")
+                
+                advanced_mode = st.session_state.get("advanced_toggle", False)
                 
                 # 建立網格與套用資料
                 uni_my_grid = create_schedule_grid(df, my_name)
@@ -714,11 +713,14 @@ with tab_unified:
                         r = opt['Period_B'] - 1
                         c = day_en.index(opt['Day_B'])
                         if opt['direct']:
-                            uni_display_grid.iloc[r, c] = f"🌟互\n{opt['Teacher_B']}"
+                            if advanced_mode:
+                                uni_display_grid.iloc[r, c] = f"🌟互\n{opt['Teacher_B']}"
+                            else:
+                                uni_display_grid.iloc[r, c] = f"🌟 {opt['Teacher_B']}"
                         elif advanced_mode: 
                             uni_display_grid.iloc[r, c] = f"🔗多\n{opt['Teacher_B']}"
 
-                # 根據開關狀態顯示不同的 HTML 說明 (移除多餘文字，統一操作說明)
+                # 根據開關狀態顯示不同的 HTML 說明
                 if advanced_mode:
                     st.markdown("""
                     <div style="padding: 15px; background-color: #eef4ff; border-radius: 8px; margin-bottom: 15px;">
@@ -727,18 +729,17 @@ with tab_unified:
                     </div>
                     """, unsafe_allow_html=True)
                 else:
-                    st.markdown("""
-                    <div style="padding: 15px; background-color: #eef4ff; border-radius: 8px; margin-bottom: 15px;">
-                        🎯 <b>操作步驟：</b> 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟老師名字</b></span> 進行互調。<br><br>
-                        <span style="color: #0066cc;"><b>🌟互</b></span>：兩人互調
-                    </div>
-                    """, unsafe_allow_html=True)
+                    st.info("🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 **🌟 老師名字** 選擇對象。")
                 
                 try: styled_uni_grid = uni_display_grid.style.map(style_my_grid)
                 except AttributeError: styled_uni_grid = uni_display_grid.style.applymap(style_my_grid)
 
                 event_uni = st.dataframe(styled_uni_grid, use_container_width=True, height=320, on_select="rerun", selection_mode="single-cell", key="uni_schedule_grid")
                 
+                # 放置開關於課表下方
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.toggle("🚀 一鍵解鎖進階多角調", key="advanced_toggle")
+
                 selection_uni = event_uni.selection.cells
                 if selection_uni:
                     cell = selection_uni[0]
@@ -766,7 +767,7 @@ with tab_unified:
                                     st.session_state.uni_last_clicked_cell = clicked_id
                                     st.rerun()
                             else:
-                                if st.session_state.uni_source_class and ("🌟互" in str(uni_display_grid.iloc[r_idx, c_idx]) or "🔗多" in str(uni_display_grid.iloc[r_idx, c_idx])):
+                                if st.session_state.uni_source_class and ("🌟" in str(uni_display_grid.iloc[r_idx, c_idx]) or "🔗" in str(uni_display_grid.iloc[r_idx, c_idx])):
                                     st.session_state.uni_target_tb = clicked_id
                                     st.session_state.uni_last_clicked_cell = clicked_id
                                     st.rerun()
@@ -906,7 +907,6 @@ with tab_unified:
                                 st.success("✅ 方案已成功加入！請切換至第二步查看。")
         else:
             st.info("請先在最上方選擇您的名字。")
-
 
 # ----------------- Tab 2: 🖨️ 第二步：列印單據與輸出 -----------------
 with tab_print:
