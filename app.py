@@ -554,7 +554,6 @@ day_en = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 day_zh = ['星期一', '星期二', '星期三', '星期四', '星期五']
 day_map_rev = dict(zip(day_zh, day_en))
 
-# 渲染前往第二步的捷徑按鈕 (JS HTML)
 def render_jump_button():
     jump_html = '''
     <button onclick="
@@ -620,7 +619,7 @@ with tab_swap:
             if advanced_mode:
                 st.markdown("""
                 <div style="padding: 15px; background-color: #eef4ff; border-radius: 8px; margin-bottom: 15px;">
-                    🎯 <b>操作步驟：</b> 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟互</b></span> 或 <span style="color: #e67e22;"><b>🔗多</b></span> 選擇對象。<br><br>
+                    🎯 <b>操作步驟：</b> 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟</b></span> 或 <span style="color: #e67e22;"><b>🔗老師名字</b></span> 選擇對象。<br><br>
                     <span style="color: #0066cc;"><b>🌟互</b></span>：兩人互調 &emsp; | &emsp; <span style="color: #e67e22;"><b>🔗多</b></span>：跨班連鎖或三角調
                 </div>
                 """, unsafe_allow_html=True)
@@ -703,22 +702,19 @@ with tab_swap:
                                 st.error(f"⚠️ 衝堂警告：您 在 {date_mine} {p_m_str} 的課已加入過清單！"); conflict = True
                             elif check_source_conflict(st.session_state.res_data, opt['Teacher_B'], date_target, p_t_str):
                                 st.error(f"⚠️ 衝堂警告：{opt['Teacher_B']}老師 在 {date_target} {p_t_str} 的課已加入過清單！"); conflict = True
-                            elif check_destination_conflict(st.session_state.res_data, my_name, date_target, p_t_str):
-                                st.error(f"⚠️ 目標衝堂：您 在 {date_target} {p_t_str} 已有調入的課程！"); conflict = True
-                            elif check_destination_conflict(st.session_state.res_data, opt['Teacher_B'], date_mine, p_m_str):
-                                st.error(f"⚠️ 目標衝堂：{opt['Teacher_B']}老師 在 {date_mine} {p_m_str} 已有調入的課程！"); conflict = True
                             
+                            # 【修正點：這裡的變數名稱修正為 uni_source_class 等，避免報錯】
                             if not conflict:
                                 current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
                                 next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
                                 new_rows = pd.DataFrame([
-                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, "日期": pd.to_datetime(date_mine), "節次": p_m_str, "科目": str(st.session_state.uni_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
-                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, "日期": pd.to_datetime(date_target), "節次": p_t_str, "科目": str(opt['Subject_X']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"}
+                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_mine), "節次": p_m_str, "科目": str(st.session_state.uni_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
+                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_target), "節次": p_t_str, "科目": str(opt['Subject_X']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"}
                                 ])
                                 st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
                                 st.success("✅ 已成功加入！")
-                                render_jump_button() # 呼叫傳送門
-                            
+                                render_jump_button() 
+                        
                 elif advanced_mode:
                     st.subheader(f"💡 請選擇協助的［橋樑］老師")
                     bridge_options = {}
@@ -809,7 +805,7 @@ with tab_swap:
                                 st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
                                 
                             st.success("✅ 方案已成功加入！")
-                            render_jump_button() # 呼叫傳送門
+                            render_jump_button() 
     else:
         st.info("👋 歡迎！請先在最上方選擇您的名字以顯示課表。")
 
