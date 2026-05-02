@@ -92,6 +92,7 @@ def find_triangle_swaps(df, my_name, target_class, my_day, my_period):
             })
     return results
 
+# 終極整合演算法：一次算出某堂課的所有可能解法 (直接、連鎖、三角)
 def find_all_swaps(df, my_name, target_class, my_day, my_period):
     options = {}
     class_x_schedule = df[df['Class'] == target_class]
@@ -104,6 +105,7 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
 
         if teacher_b == my_name: continue
 
+        # 您必須在B老師的時段有空
         if not df[(df['Teacher'] == my_name) & (df['Day'] == day_b) & (df['Period'] == period_b)].empty: continue
 
         tb_key = f"{day_b}_{period_b}"
@@ -113,14 +115,18 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
                 "Subject_X": subject_x, "direct": False, "chains": []
             }
 
+        # 檢查B老師在您的時段是否有空
         b_conflict = df[(df['Teacher'] == teacher_b) & (df['Day'] == my_day) & (df['Period'] == my_period)]
 
         if b_conflict.empty:
+            # 對方有空 -> 直接互換
             options[tb_key]["direct"] = True
         else:
+            # 對方沒空 -> 尋找第三人 (連鎖/三角)
             class_w = b_conflict.iloc[0]['Class']
             subject_w = b_conflict.iloc[0]['Subject']
 
+            # 1. 跨班連鎖 (B把W班給C)
             if class_w != target_class:
                 for _, row_c in df[df['Class'] == class_w].iterrows():
                     teacher_c = row_c['Teacher']
@@ -136,6 +142,7 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
                         "Class_W": class_w, "Subject_W": subject_w, "Subject_C_W": row_c['Subject'] 
                     })
 
+            # 2. 三角調 (B把原本要接您的X班丟給C)
             for _, row_c in df[df['Class'] == target_class].iterrows():
                 teacher_c = row_c['Teacher']
                 day_c = row_c['Day']
@@ -150,7 +157,9 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
                     "Class_W": target_class, "Subject_W": row_c['Subject'] 
                 })
 
+    # 過濾掉完全沒解法的選項
     return {k: v for k, v in options.items() if v["direct"] or v["chains"]}
+
 
 def create_schedule_grid(df, teacher_name):
     t_df = df[df['Teacher'] == teacher_name].copy()
@@ -545,10 +554,24 @@ day_en = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 day_zh = ['星期一', '星期二', '星期三', '星期四', '星期五']
 day_map_rev = dict(zip(day_zh, day_en))
 
+# 渲染前往第二步的捷徑按鈕 (JS HTML)
+def render_jump_button():
+    jump_html = '''
+    <button onclick="
+        var tabs = window.parent.document.querySelectorAll('button[data-baseweb=&quot;tab&quot;]');
+        if(tabs.length > 1){
+            tabs[1].click();
+            window.parent.scrollTo({top: 0, behavior: 'smooth'});
+        }
+    " style="width: 100%; padding: 0.8rem; background-color: #28a745; color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 1.1rem; font-weight: bold; margin-top: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: opacity 0.3s;">
+        👉 點此跳轉至【🖨️ 第二步：列印單據與輸出】
+    </button>
+    '''
+    st.markdown(jump_html, unsafe_allow_html=True)
+
 # ================= 6. UI 版面佈局 =================
 st.title("🏫 正德調課小幫手 ＆ 列印整合系統")
 
-# 【全域選單】
 all_teachers = sorted(df['Teacher'].dropna().unique())
 my_name = st.selectbox("🙋‍♂️ 請輸入您的名字：", all_teachers, index=None, placeholder="請選擇您的名字...")
 
@@ -574,7 +597,6 @@ with tab_swap:
             
             advanced_mode = st.session_state.get("advanced_toggle", False)
             
-            # 建立網格與套用資料
             uni_my_grid = create_schedule_grid(df, my_name)
             uni_display_grid = uni_my_grid.copy()
             
@@ -595,18 +617,17 @@ with tab_swap:
                     elif advanced_mode: 
                         uni_display_grid.iloc[r, c] = f"🔗多\n{opt['Teacher_B']}"
 
-            # 根據開關狀態顯示不同的 HTML 說明
             if advanced_mode:
                 st.markdown("""
                 <div style="padding: 15px; background-color: #eef4ff; border-radius: 8px; margin-bottom: 15px;">
-                    🎯 <b>操作步驟：</b> 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟</b></span> 或 <span style="color: #e67e22;"><b>🔗老師名字</b></span> 選擇對象。<br><br>
+                    🎯 <b>操作步驟：</b> 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟互</b></span> 或 <span style="color: #e67e22;"><b>🔗多</b></span> 選擇對象。<br><br>
                     <span style="color: #0066cc;"><b>🌟互</b></span>：兩人互調 &emsp; | &emsp; <span style="color: #e67e22;"><b>🔗多</b></span>：跨班連鎖或三角調
                 </div>
                 """, unsafe_allow_html=True)
             else:
                 st.markdown("""
                 <div style="padding: 15px; background-color: #eef4ff; border-radius: 8px; margin-bottom: 15px;">
-                    🎯 <b>操作步驟：</b> 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟 老師名字</b></span> 選擇對象。
+                    🎯 <b>操作步驟：</b> 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟 老師名字</b></span> 進行互調。
                 </div>
                 """, unsafe_allow_html=True)
             
@@ -615,7 +636,6 @@ with tab_swap:
 
             event_uni = st.dataframe(styled_uni_grid, use_container_width=True, height=320, on_select="rerun", selection_mode="single-cell", key="uni_schedule_grid")
             
-            # 【放置開關於課表下方】
             st.markdown("<br>", unsafe_allow_html=True)
             st.toggle("🚀 一鍵解鎖進階多角調 (跨班連鎖/三角調)", key="advanced_toggle")
 
@@ -646,7 +666,6 @@ with tab_swap:
                                 st.session_state.uni_last_clicked_cell = clicked_id
                                 st.rerun()
                         else:
-                            # 點擊選項 (相容 🌟、🌟互、🔗多)
                             if st.session_state.uni_source_class and ("🌟" in str(uni_display_grid.iloc[r_idx, c_idx]) or "🔗" in str(uni_display_grid.iloc[r_idx, c_idx])):
                                 st.session_state.uni_target_tb = clicked_id
                                 st.session_state.uni_last_clicked_cell = clicked_id
@@ -659,7 +678,6 @@ with tab_swap:
                 opt = all_swaps[st.session_state.uni_target_tb]
                 
                 if opt['direct']:
-                    # --- 純直接互換 UI ---
                     st.subheader(f"👀 {opt['Teacher_B']}老師的課表變化")
                     grid_b = create_schedule_grid(df, opt['Teacher_B'])
                     grid_b.iloc[opt['Period_B'] - 1, day_en.index(opt['Day_B'])] = "" 
@@ -685,7 +703,6 @@ with tab_swap:
                                 st.error(f"⚠️ 衝堂警告：您 在 {date_mine} {p_m_str} 的課已加入過清單！"); conflict = True
                             elif check_source_conflict(st.session_state.res_data, opt['Teacher_B'], date_target, p_t_str):
                                 st.error(f"⚠️ 衝堂警告：{opt['Teacher_B']}老師 在 {date_target} {p_t_str} 的課已加入過清單！"); conflict = True
-                            # 加入目標衝堂檢查
                             elif check_destination_conflict(st.session_state.res_data, my_name, date_target, p_t_str):
                                 st.error(f"⚠️ 目標衝堂：您 在 {date_target} {p_t_str} 已有調入的課程！"); conflict = True
                             elif check_destination_conflict(st.session_state.res_data, opt['Teacher_B'], date_mine, p_m_str):
@@ -695,14 +712,14 @@ with tab_swap:
                                 current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
                                 next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
                                 new_rows = pd.DataFrame([
-                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_mine), "節次": p_m_str, "科目": str(st.session_state.uni_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
-                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_target), "節次": p_t_str, "科目": str(opt['Subject_X']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"}
+                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, "日期": pd.to_datetime(date_mine), "節次": p_m_str, "科目": str(st.session_state.uni_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
+                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.source_class, "日期": pd.to_datetime(date_target), "節次": p_t_str, "科目": str(opt['Subject_X']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"}
                                 ])
                                 st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
-                                st.success("✅ 已成功加入！請切換至第二步查看。")
+                                st.success("✅ 已成功加入！")
+                                render_jump_button() # 呼叫傳送門
                             
                 elif advanced_mode:
-                    # --- 跨班連鎖 / 三角調 UI ---
                     st.subheader(f"💡 請選擇協助的［橋樑］老師")
                     bridge_options = {}
                     for c in opt['chains']:
@@ -717,18 +734,14 @@ with tab_swap:
                     grid_c = create_schedule_grid(df, c_data['Teacher_C'])
                     
                     if c_data['type'] == 'chain':
-                        # B的變化
                         grid_b.iloc[opt['Period_B'] - 1, day_en.index(opt['Day_B'])] = "" 
                         grid_b.iloc[st.session_state.uni_source_period - 1, day_en.index(st.session_state.uni_source_day_en)] = f"{st.session_state.uni_source_class}班\n{opt['Subject_X']}\u200b"
                         grid_b.iloc[c_data['Period_C'] - 1, day_en.index(c_data['Day_C'])] = f"{c_data['Class_W']}班\n{c_data['Subject_W']}\u200b"
-                        # C的變化
                         grid_c.iloc[c_data['Period_C'] - 1, day_en.index(c_data['Day_C'])] = "" 
                         grid_c.iloc[st.session_state.uni_source_period - 1, day_en.index(st.session_state.uni_source_day_en)] = f"{c_data['Class_W']}班\n{c_data['Subject_C_W']}\u200b"
                     else:
-                        # B的變化 (Triangle)
                         grid_b.iloc[opt['Period_B'] - 1, day_en.index(opt['Day_B'])] = "" 
                         grid_b.iloc[c_data['Period_C'] - 1, day_en.index(c_data['Day_C'])] = f"{st.session_state.uni_source_class}班\n{opt['Subject_X']}\u200b"
-                        # C的變化
                         grid_c.iloc[c_data['Period_C'] - 1, day_en.index(c_data['Day_C'])] = "" 
                         grid_c.iloc[st.session_state.uni_source_period - 1, day_en.index(st.session_state.uni_source_day_en)] = f"{st.session_state.uni_source_class}班\n{c_data['Subject_W']}\u200b"
 
@@ -763,7 +776,6 @@ with tab_swap:
                             st.error(f"⚠️ 衝堂警告：{opt['Teacher_B']}老師 在 {date_b} {p_b_str} 的課已加入過清單！"); conflict = True
                         elif check_source_conflict(st.session_state.res_data, c_data['Teacher_C'], date_c, p_c_str):
                             st.error(f"⚠️ 衝堂警告：{c_data['Teacher_C']}老師 在 {date_c} {p_c_str} 的課已加入過清單！"); conflict = True
-                        # 加入目標衝堂檢查
                         elif check_destination_conflict(st.session_state.res_data, my_name, date_b, p_b_str):
                             st.error(f"⚠️ 目標衝堂：您 在 {date_b} {p_b_str} 已有調入的課程！"); conflict = True
                         elif check_destination_conflict(st.session_state.res_data, opt['Teacher_B'], date_c, p_c_str):
@@ -796,7 +808,8 @@ with tab_swap:
                                 ])
                                 st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
                                 
-                            st.success("✅ 方案已成功加入！請切換至第二步查看。")
+                            st.success("✅ 方案已成功加入！")
+                            render_jump_button() # 呼叫傳送門
     else:
         st.info("👋 歡迎！請先在最上方選擇您的名字以顯示課表。")
 
