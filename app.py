@@ -546,7 +546,7 @@ def render_jump_button():
     components.html(jump_html, height=55)
 
 # ================= 6. UI 版面佈局 =================
-# 【修改點】：使用 subheader 讓主標題和副標題尺寸完全一致
+# 【修改點】：使用系統原生的 subheader 讓字體大小完美一致
 st.subheader("🏫 正德調課小幫手")
 
 col_top1, col_top2, col_top3 = st.columns([1, 2, 1])
