@@ -55,44 +55,6 @@ except FileNotFoundError:
     st.stop()
 
 # ================= 3. 調課核心演算法 =================
-def find_swap_options(df, my_name, target_class, my_day, my_period):
-    class_schedule = df[df['Class'] == target_class]
-    potential_matches = class_schedule[class_schedule['Teacher'] != my_name]
-    recommendations = []
-    for _, row in potential_matches.iterrows():
-        other_teacher = row['Teacher']
-        other_day = row['Day']
-        other_period = row['Period']
-        other_subject = row['Subject']
-        
-        is_other_busy = df[(df['Teacher'] == other_teacher) & (df['Day'] == my_day) & (df['Period'] == my_period)]
-        is_me_busy = df[(df['Teacher'] == my_name) & (df['Day'] == other_day) & (df['Period'] == other_period)]
-        
-        if is_other_busy.empty and is_me_busy.empty:
-            recommendations.append({"Teacher": other_teacher, "Subject": other_subject, "OtherDay": other_day, "OtherPeriod": other_period})
-    return recommendations
-
-def find_triangle_swaps(df, my_name, target_class, my_day, my_period):
-    class_schedule = df[df['Class'] == target_class]
-    results = []
-    for _, row_b in class_schedule.iterrows():
-        teacher_b = row_b['Teacher']
-        if teacher_b == my_name: continue
-        if not df[(df['Teacher'] == my_name) & (df['Day'] == row_b['Day']) & (df['Period'] == row_b['Period'])].empty: continue
-            
-        for _, row_c in class_schedule.iterrows():
-            teacher_c = row_c['Teacher']
-            if teacher_c == my_name or teacher_c == teacher_b: continue
-            if not df[(df['Teacher'] == teacher_b) & (df['Day'] == row_c['Day']) & (df['Period'] == row_c['Period'])].empty: continue
-            if not df[(df['Teacher'] == teacher_c) & (df['Day'] == my_day) & (df['Period'] == my_period)].empty: continue
-                
-            results.append({
-                "Teacher_B": teacher_b, "Day_B": row_b['Day'], "Period_B": row_b['Period'], "Subject_B": row_b['Subject'],
-                "Teacher_C": teacher_c, "Day_C": row_c['Day'], "Period_C": row_c['Period'], "Subject_C": row_c['Subject']
-            })
-    return results
-
-# 終極整合演算法：一次算出某堂課的所有可能解法 (直接、連鎖、三角)
 def find_all_swaps(df, my_name, target_class, my_day, my_period):
     options = {}
     class_x_schedule = df[df['Class'] == target_class]
@@ -104,8 +66,6 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
         subject_x = row_b['Subject']
 
         if teacher_b == my_name: continue
-
-        # 您必須在B老師的時段有空
         if not df[(df['Teacher'] == my_name) & (df['Day'] == day_b) & (df['Period'] == period_b)].empty: continue
 
         tb_key = f"{day_b}_{period_b}"
@@ -115,18 +75,14 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
                 "Subject_X": subject_x, "direct": False, "chains": []
             }
 
-        # 檢查B老師在您的時段是否有空
         b_conflict = df[(df['Teacher'] == teacher_b) & (df['Day'] == my_day) & (df['Period'] == my_period)]
 
         if b_conflict.empty:
-            # 對方有空 -> 直接互換
             options[tb_key]["direct"] = True
         else:
-            # 對方沒空 -> 尋找第三人 (連鎖/三角)
             class_w = b_conflict.iloc[0]['Class']
             subject_w = b_conflict.iloc[0]['Subject']
 
-            # 1. 跨班連鎖 (B把W班給C)
             if class_w != target_class:
                 for _, row_c in df[df['Class'] == class_w].iterrows():
                     teacher_c = row_c['Teacher']
@@ -142,7 +98,6 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
                         "Class_W": class_w, "Subject_W": subject_w, "Subject_C_W": row_c['Subject'] 
                     })
 
-            # 2. 三角調 (B把原本要接您的X班丟給C)
             for _, row_c in df[df['Class'] == target_class].iterrows():
                 teacher_c = row_c['Teacher']
                 day_c = row_c['Day']
@@ -157,9 +112,7 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
                     "Class_W": target_class, "Subject_W": row_c['Subject'] 
                 })
 
-    # 過濾掉完全沒解法的選項
     return {k: v for k, v in options.items() if v["direct"] or v["chains"]}
-
 
 def create_schedule_grid(df, teacher_name):
     t_df = df[df['Teacher'] == teacher_name].copy()
@@ -291,7 +244,6 @@ def generate_timetable_block(container_cell, title_suffix, sch_year, sch_term, i
         
         is_first = True
         
-        # 繪製新課程
         if actual_classes:
             for idx, row_data in enumerate(actual_classes):
                 if is_first: 
@@ -342,7 +294,6 @@ def generate_timetable_block(container_cell, title_suffix, sch_year, sch_term, i
                     else: run_type = p4.add_run("[調課]")
                     run_type.font.size = Pt(8)
                             
-        # 繪製被調走的X (獨立處理，不被覆蓋)
         if x_marks and "教師通知聯" in title_suffix:
             for idx, row_data in enumerate(x_marks):
                 if is_first: 
@@ -555,48 +506,27 @@ day_zh = ['星期一', '星期二', '星期三', '星期四', '星期五']
 day_map_rev = dict(zip(day_zh, day_en))
 
 def render_jump_button():
-    jump_html = """
-    <!DOCTYPE html>
-    <html>
-    <head>
-    <style>
-    body { margin: 0; padding: 0; font-family: sans-serif; }
-    .jump-btn {
-        width: 100%; 
-        padding: 0.8rem; 
-        background-color: #28a745; 
-        color: white; 
-        border: none; 
-        border-radius: 0.5rem; 
-        cursor: pointer; 
-        font-size: 1.1rem; 
-        font-weight: bold; 
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
-        transition: opacity 0.3s;
-    }
-    .jump-btn:hover { opacity: 0.8; }
-    </style>
-    </head>
-    <body>
-        <button class="jump-btn" onclick="
-            const tabs = window.parent.document.querySelectorAll('button[data-baseweb=\\'tab\\']');
-            if(tabs.length > 1){
-                tabs[1].click();
-                window.parent.scrollTo({top: 0, behavior: 'smooth'});
-            }
-        ">
-            👉 點此跳轉至【🖨️ 第二步：列印單據與輸出】
-        </button>
-    </body>
-    </html>
-    """
-    components.html(jump_html, height=60)
+    jump_html = '''
+    <button onclick="
+        var tabs = window.parent.document.querySelectorAll('button[data-baseweb=&quot;tab&quot;]');
+        if(tabs.length > 1){
+            tabs[1].click();
+            window.parent.scrollTo({top: 0, behavior: 'smooth'});
+        }
+    " style="width: 100%; padding: 0.8rem; background-color: #28a745; color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 1.1rem; font-weight: bold; margin-top: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: opacity 0.3s;">
+        👉 點此跳轉至【🖨️ 第二步：列印單據與輸出】
+    </button>
+    '''
+    st.markdown(jump_html, unsafe_allow_html=True)
 
 # ================= 6. UI 版面佈局 =================
 st.title("🏫 正德調課小幫手 ＆ 列印整合系統")
 
-all_teachers = sorted(df['Teacher'].dropna().unique())
-my_name = st.selectbox("🙋‍♂️ 請輸入您的名字：", all_teachers, index=None, placeholder="請選擇您的名字...")
+# 【全域選單】居中顯示
+col_top1, col_top2, col_top3 = st.columns([1, 2, 1])
+with col_top2:
+    all_teachers = sorted(df['Teacher'].dropna().unique())
+    my_name = st.selectbox("🙋‍♂️ 請選擇您的名字：", all_teachers, index=None, placeholder="請選擇...")
 
 if my_name and my_name != st.session_state.last_user_name:
     for k in state_keys: st.session_state[k] = None
@@ -606,7 +536,7 @@ st.markdown("---")
 
 tab_swap, tab_print = st.tabs(["🔄 第一步：智慧調課", "🖨️ 第二步：列印單據與輸出"])
 
-# ----------------- Tab 1: 第一步：智慧調課 (整合版) -----------------
+# ----------------- Tab 1: 智慧調課 -----------------
 with tab_swap:
     if my_name:
         all_swaps = {}
@@ -618,8 +548,22 @@ with tab_swap:
         with col_c1:
             st.subheader(f"📅 【{my_name}老師】的課表")
             
-            advanced_mode = st.session_state.get("advanced_toggle", False)
-            
+            # 使用卡片整合控制區
+            with st.container(border=True):
+                advanced_mode = st.session_state.get("advanced_toggle", False)
+                
+                if advanced_mode:
+                    st.markdown("""
+                        🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟</b></span> 或 <span style="color: #e67e22;"><b>🔗老師名字</b></span> 選擇對象。<br><br>
+                        <span style="color: #0066cc;"><b>🌟互</b></span>：兩人互調 &emsp; | &emsp; <span style="color: #e67e22;"><b>🔗多</b></span>：跨班連鎖或三角調
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown("""
+                        🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟 老師名字</b></span> 進行互調。<br>
+                    """, unsafe_allow_html=True)
+
+                st.toggle("🚀 一鍵解鎖進階多角調 (連鎖/三角)", key="advanced_toggle")
+
             uni_my_grid = create_schedule_grid(df, my_name)
             uni_display_grid = uni_my_grid.copy()
             
@@ -639,28 +583,11 @@ with tab_swap:
                             uni_display_grid.iloc[r, c] = f"🌟 {opt['Teacher_B']}"
                     elif advanced_mode: 
                         uni_display_grid.iloc[r, c] = f"🔗多\n{opt['Teacher_B']}"
-
-            if advanced_mode:
-                st.markdown("""
-                <div style="padding: 15px; background-color: #eef4ff; border-radius: 8px; margin-bottom: 15px;">
-                    🎯 <b>操作步驟：</b> 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟</b></span> 或 <span style="color: #e67e22;"><b>🔗老師名字</b></span> 選擇對象。<br><br>
-                    <span style="color: #0066cc;"><b>🌟互</b></span>：兩人互調 &emsp; | &emsp; <span style="color: #e67e22;"><b>🔗多</b></span>：跨班連鎖或三角調
-                </div>
-                """, unsafe_allow_html=True)
-            else:
-                st.markdown("""
-                <div style="padding: 15px; background-color: #eef4ff; border-radius: 8px; margin-bottom: 15px;">
-                    🎯 <b>操作步驟：</b> 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟 老師名字</b></span> 進行互調。
-                </div>
-                """, unsafe_allow_html=True)
             
             try: styled_uni_grid = uni_display_grid.style.map(style_my_grid)
             except AttributeError: styled_uni_grid = uni_display_grid.style.applymap(style_my_grid)
 
             event_uni = st.dataframe(styled_uni_grid, use_container_width=True, height=320, on_select="rerun", selection_mode="single-cell", key="uni_schedule_grid")
-            
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.toggle("🚀 一鍵解鎖進階多角調 (跨班連鎖/三角調)", key="advanced_toggle")
 
             selection_uni = event_uni.selection.cells
             if selection_uni:
@@ -709,39 +636,41 @@ with tab_swap:
                     try: st.dataframe(grid_b.style.map(style_target_grid), use_container_width=True, height=320)
                     except AttributeError: st.dataframe(grid_b.style.applymap(style_target_grid), use_container_width=True, height=320)
                     
-                    st.markdown("### 📥 將此配對加入列印清單")
-                    col_d1, col_d2, col_btn = st.columns([2, 2, 1.5])
-                    day_b_zh = [k for k, v in day_map_rev.items() if v == opt['Day_B']][0]
-                    with col_d1: date_mine = st.date_input(f"您的原上課日 ({st.session_state.uni_source_day_zh})", value=get_next_weekday(st.session_state.uni_source_day_zh), key="uni_d1")
-                    with col_d2: date_target = st.date_input(f"對方原上課日 ({day_b_zh})", value=get_next_weekday(day_b_zh), key="uni_d2")
-                    
-                    with col_btn:
-                        st.markdown("<br>", unsafe_allow_html=True)
-                        if st.button("➕ 一鍵加入", type="primary", use_container_width=True, key="uni_btn_direct"):
-                            p_m_str = f"第 {st.session_state.uni_source_period} 節"
-                            p_t_str = f"第 {opt['Period_B']} 節"
-                            
-                            conflict = False
-                            if check_source_conflict(st.session_state.res_data, my_name, date_mine, p_m_str):
-                                st.error(f"⚠️ 衝堂警告：您 在 {date_mine} {p_m_str} 的課已加入過清單！"); conflict = True
-                            elif check_source_conflict(st.session_state.res_data, opt['Teacher_B'], date_target, p_t_str):
-                                st.error(f"⚠️ 衝堂警告：{opt['Teacher_B']}老師 在 {date_target} {p_t_str} 的課已加入過清單！"); conflict = True
-                            elif check_destination_conflict(st.session_state.res_data, my_name, date_target, p_t_str):
-                                st.error(f"⚠️ 目標衝堂：您 在 {date_target} {p_t_str} 已有調入的課程！"); conflict = True
-                            elif check_destination_conflict(st.session_state.res_data, opt['Teacher_B'], date_mine, p_m_str):
-                                st.error(f"⚠️ 目標衝堂：{opt['Teacher_B']}老師 在 {date_mine} {p_m_str} 已有調入的課程！"); conflict = True
-                            
-                            if not conflict:
-                                current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
-                                next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
-                                new_rows = pd.DataFrame([
-                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_mine), "節次": p_m_str, "科目": str(st.session_state.uni_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
-                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_target), "節次": p_t_str, "科目": str(opt['Subject_X']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"}
-                                ])
-                                st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
-                                st.success("✅ 已成功加入！")
-                                render_jump_button() 
+                    # 放入卡片中，增加完成感
+                    with st.container(border=True):
+                        st.markdown("#### 📥 確認無誤，加入列印清單")
+                        col_d1, col_d2, col_btn = st.columns([2, 2, 1.5])
+                        day_b_zh = [k for k, v in day_map_rev.items() if v == opt['Day_B']][0]
+                        with col_d1: date_mine = st.date_input(f"您的原上課日 ({st.session_state.uni_source_day_zh})", value=get_next_weekday(st.session_state.uni_source_day_zh), key="uni_d1")
+                        with col_d2: date_target = st.date_input(f"對方原上課日 ({day_b_zh})", value=get_next_weekday(day_b_zh), key="uni_d2")
                         
+                        with col_btn:
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            if st.button("➕ 一鍵加入", type="primary", use_container_width=True, key="uni_btn_direct"):
+                                p_m_str = f"第 {st.session_state.uni_source_period} 節"
+                                p_t_str = f"第 {opt['Period_B']} 節"
+                                
+                                conflict = False
+                                if check_source_conflict(st.session_state.res_data, my_name, date_mine, p_m_str):
+                                    st.error(f"⚠️ 衝堂：您 在 {date_mine} {p_m_str} 已有課！"); conflict = True
+                                elif check_source_conflict(st.session_state.res_data, opt['Teacher_B'], date_target, p_t_str):
+                                    st.error(f"⚠️ 衝堂：{opt['Teacher_B']}老師 在 {date_target} {p_t_str} 已有課！"); conflict = True
+                                elif check_destination_conflict(st.session_state.res_data, my_name, date_target, p_t_str):
+                                    st.error(f"⚠️ 衝堂：您 在 {date_target} {p_t_str} 已有課！"); conflict = True
+                                elif check_destination_conflict(st.session_state.res_data, opt['Teacher_B'], date_mine, p_m_str):
+                                    st.error(f"⚠️ 衝堂：{opt['Teacher_B']}老師 在 {date_mine} {p_m_str} 已有課！"); conflict = True
+                                
+                                if not conflict:
+                                    current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
+                                    next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
+                                    new_rows = pd.DataFrame([
+                                        {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_mine), "節次": p_m_str, "科目": str(st.session_state.uni_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
+                                        {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_target), "節次": p_t_str, "科目": str(opt['Subject_X']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"}
+                                    ])
+                                    st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
+                                    st.success("✅ 方案已加入！")
+                                    render_jump_button()
+                            
                 elif advanced_mode:
                     st.subheader(f"💡 請選擇協助的［橋樑］老師")
                     bridge_options = {}
@@ -772,82 +701,83 @@ with tab_swap:
                     try: st.dataframe(grid_b.style.map(style_target_grid), use_container_width=True, height=320)
                     except AttributeError: st.dataframe(grid_b.style.applymap(style_target_grid), use_container_width=True, height=320)
 
-                    st.markdown("<br>", unsafe_allow_html=True)
-
                     st.markdown(f"**👀 {c_data['Teacher_C']}老師的課表變化**")
                     try: st.dataframe(grid_c.style.map(style_target_grid), use_container_width=True, height=320)
                     except AttributeError: st.dataframe(grid_c.style.applymap(style_target_grid), use_container_width=True, height=320)
 
-                    st.markdown("### 📥 將此配對加入列印清單")
-                    day_b_zh = [k for k, v in day_map_rev.items() if v == opt['Day_B']][0]
-                    day_c_zh = [k for k, v in day_map_rev.items() if v == c_data['Day_C']][0]
-                    
-                    col_date1, col_date2, col_date3 = st.columns(3)
-                    with col_date1: date_mine = st.date_input(f"您的原上課日 ({st.session_state.uni_source_day_zh})", value=get_next_weekday(st.session_state.uni_source_day_zh), key="uni_d1_adv")
-                    with col_date2: date_b = st.date_input(f"{opt['Teacher_B']} 原上課日 ({day_b_zh})", value=get_next_weekday(day_b_zh), key="uni_d2_adv")
-                    with col_date3: date_c = st.date_input(f"{c_data['Teacher_C']} 原上課日 ({day_c_zh})", value=get_next_weekday(day_c_zh), key="uni_d3_adv")
-
-                    if st.button("➕ 一鍵加入", type="primary", use_container_width=True, key="uni_btn_adv"):
-                        p_mine_str = f"第 {st.session_state.uni_source_period} 節"
-                        p_b_str = f"第 {opt['Period_B']} 節"
-                        p_c_str = f"第 {c_data['Period_C']} 節"
+                    with st.container(border=True):
+                        st.markdown("#### 📥 確認無誤，加入列印清單")
+                        day_b_zh = [k for k, v in day_map_rev.items() if v == opt['Day_B']][0]
+                        day_c_zh = [k for k, v in day_map_rev.items() if v == c_data['Day_C']][0]
                         
-                        conflict = False
-                        if check_source_conflict(st.session_state.res_data, my_name, date_mine, p_mine_str):
-                            st.error(f"⚠️ 衝堂警告：您 在 {date_mine} {p_mine_str} 的課已加入過清單！"); conflict = True
-                        elif check_source_conflict(st.session_state.res_data, opt['Teacher_B'], date_b, p_b_str):
-                            st.error(f"⚠️ 衝堂警告：{opt['Teacher_B']}老師 在 {date_b} {p_b_str} 的課已加入過清單！"); conflict = True
-                        elif check_source_conflict(st.session_state.res_data, c_data['Teacher_C'], date_c, p_c_str):
-                            st.error(f"⚠️ 衝堂警告：{c_data['Teacher_C']}老師 在 {date_c} {p_c_str} 的課已加入過清單！"); conflict = True
-                        elif check_destination_conflict(st.session_state.res_data, my_name, date_b, p_b_str):
-                            st.error(f"⚠️ 目標衝堂：您 在 {date_b} {p_b_str} 已有調入的課程！"); conflict = True
-                        elif check_destination_conflict(st.session_state.res_data, opt['Teacher_B'], date_c, p_c_str):
-                            st.error(f"⚠️ 目標衝堂：{opt['Teacher_B']}老師 在 {date_c} {p_c_str} 已有調入的課程！"); conflict = True
-                        elif check_destination_conflict(st.session_state.res_data, c_data['Teacher_C'], date_mine, p_mine_str):
-                            st.error(f"⚠️ 目標衝堂：{c_data['Teacher_C']}老師 在 {date_mine} {p_mine_str} 已有調入的課程！"); conflict = True
+                        col_date1, col_date2, col_date3 = st.columns(3)
+                        with col_date1: date_mine = st.date_input(f"您的原上課日 ({st.session_state.uni_source_day_zh})", value=get_next_weekday(st.session_state.uni_source_day_zh), key="uni_d1_adv")
+                        with col_date2: date_b = st.date_input(f"{opt['Teacher_B']} 原上課日 ({day_b_zh})", value=get_next_weekday(day_b_zh), key="uni_d2_adv")
+                        with col_date3: date_c = st.date_input(f"{c_data['Teacher_C']} 原上課日 ({day_c_zh})", value=get_next_weekday(day_c_zh), key="uni_d3_adv")
 
-                        if not conflict:
-                            current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
+                        if st.button("➕ 一鍵加入", type="primary", use_container_width=True, key="uni_btn_adv"):
+                            p_mine_str = f"第 {st.session_state.uni_source_period} 節"
+                            p_b_str = f"第 {opt['Period_B']} 節"
+                            p_c_str = f"第 {c_data['Period_C']} 節"
                             
-                            if c_data['type'] == 'chain':
-                                next_id_1 = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
-                                next_id_2 = str(int(current_ids.max() + 2)) if not current_ids.empty else "2"
+                            conflict = False
+                            if check_source_conflict(st.session_state.res_data, my_name, date_mine, p_mine_str):
+                                st.error(f"⚠️ 衝堂警告：您 在 {date_mine} {p_mine_str} 已有課！"); conflict = True
+                            elif check_source_conflict(st.session_state.res_data, opt['Teacher_B'], date_b, p_b_str):
+                                st.error(f"⚠️ 衝堂警告：{opt['Teacher_B']}老師 在 {date_b} {p_b_str} 已有課！"); conflict = True
+                            elif check_source_conflict(st.session_state.res_data, c_data['Teacher_C'], date_c, p_c_str):
+                                st.error(f"⚠️ 衝堂警告：{c_data['Teacher_C']}老師 在 {date_c} {p_c_str} 已有課！"); conflict = True
+                            elif check_destination_conflict(st.session_state.res_data, my_name, date_b, p_b_str):
+                                st.error(f"⚠️ 目標衝堂：您 在 {date_b} {p_b_str} 已有課！"); conflict = True
+                            elif check_destination_conflict(st.session_state.res_data, opt['Teacher_B'], date_c, p_c_str):
+                                st.error(f"⚠️ 目標衝堂：{opt['Teacher_B']}老師 在 {date_c} {p_c_str} 已有課！"); conflict = True
+                            elif check_destination_conflict(st.session_state.res_data, c_data['Teacher_C'], date_mine, p_mine_str):
+                                st.error(f"⚠️ 目標衝堂：{c_data['Teacher_C']}老師 在 {date_mine} {p_mine_str} 已有課！"); conflict = True
+
+                            if not conflict:
+                                current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
                                 
-                                group1 = pd.DataFrame([
-                                    {"勾選列印資料": True, "配對編號": next_id_1, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_mine), "節次": p_mine_str, "科目": str(st.session_state.uni_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
-                                    {"勾選列印資料": True, "配對編號": next_id_1, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_b), "節次": p_b_str, "科目": str(opt['Subject_X']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"}
-                                ])
-                                group2 = pd.DataFrame([
-                                    {"勾選列印資料": True, "配對編號": next_id_2, "班級": c_data['Class_W'], "日期": pd.to_datetime(date_mine), "節次": p_mine_str, "科目": str(c_data['Subject_W']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"},
-                                    {"勾選列印資料": True, "配對編號": next_id_2, "班級": c_data['Class_W'], "日期": pd.to_datetime(date_c), "節次": p_c_str, "科目": str(c_data['Subject_C_W']).strip(), "老師": c_data['Teacher_C'], "調/代課": "調課"}
-                                ])
-                                st.session_state.res_data = pd.concat([st.session_state.res_data, group1, group2], ignore_index=True)
-                            else:
-                                next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
-                                new_rows = pd.DataFrame([
-                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_mine), "節次": p_mine_str, "科目": str(st.session_state.uni_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
-                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_b), "節次": p_b_str, "科目": str(opt['Subject_X']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"},
-                                    {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_c), "節次": p_c_str, "科目": str(c_data['Subject_W']).strip(), "老師": c_data['Teacher_C'], "調/代課": "調課"}
-                                ])
-                                st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
-                                
-                            st.success("✅ 方案已成功加入！")
-                            render_jump_button() 
+                                if c_data['type'] == 'chain':
+                                    next_id_1 = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
+                                    next_id_2 = str(int(current_ids.max() + 2)) if not current_ids.empty else "2"
+                                    
+                                    group1 = pd.DataFrame([
+                                        {"勾選列印資料": True, "配對編號": next_id_1, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_mine), "節次": p_mine_str, "科目": str(st.session_state.uni_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
+                                        {"勾選列印資料": True, "配對編號": next_id_1, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_b), "節次": p_b_str, "科目": str(opt['Subject_X']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"}
+                                    ])
+                                    group2 = pd.DataFrame([
+                                        {"勾選列印資料": True, "配對編號": next_id_2, "班級": c_data['Class_W'], "日期": pd.to_datetime(date_mine), "節次": p_mine_str, "科目": str(c_data['Subject_W']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"},
+                                        {"勾選列印資料": True, "配對編號": next_id_2, "班級": c_data['Class_W'], "日期": pd.to_datetime(date_c), "節次": p_c_str, "科目": str(c_data['Subject_C_W']).strip(), "老師": c_data['Teacher_C'], "調/代課": "調課"}
+                                    ])
+                                    st.session_state.res_data = pd.concat([st.session_state.res_data, group1, group2], ignore_index=True)
+                                else:
+                                    next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
+                                    new_rows = pd.DataFrame([
+                                        {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_mine), "節次": p_mine_str, "科目": str(st.session_state.uni_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
+                                        {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_b), "節次": p_b_str, "科目": str(opt['Subject_X']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"},
+                                        {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_c), "節次": p_c_str, "科目": str(c_data['Subject_W']).strip(), "老師": c_data['Teacher_C'], "調/代課": "調課"}
+                                    ])
+                                    st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
+                                    
+                                st.success("✅ 方案已成功加入！")
+                                render_jump_button()
     else:
         st.info("👋 歡迎！請先在最上方選擇您的名字以顯示課表。")
 
 # ----------------- Tab 2: 🖨️ 第二步：列印單據與輸出 -----------------
 with tab_print:
-    c1, c2, c3 = st.columns(3)
-    with c1: sch_year = st.text_input("學年度", value="114")
-    with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
-    with c3: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
+    with st.container(border=True):
+        st.markdown("### ⚙️ 單據表頭設定")
+        c1, c2, c3 = st.columns(3)
+        with c1: sch_year = st.text_input("學年度", value="114")
+        with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
+        with c3: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
 
     df_subs = df['Subject'].dropna().astype(str).str.strip().unique().tolist()
     base_subs = ["", "國文", "英文", "數學", "生物", "理化", "地科", "地理", "歷史", "公民", "體育", "健康", "視藝", "表藝", "音樂", "家政", "童軍", "輔導", "資訊", "生科", "本土語"]
     subject_list = list(dict.fromkeys(base_subs + df_subs))
 
-    st.markdown("#### 📝 待列印清單編輯區")
+    st.markdown("### 📝 待列印清單編輯區")
     
     if not st.session_state.res_data.empty:
         st.session_state.res_data["日期"] = pd.to_datetime(st.session_state.res_data["日期"], errors='coerce')
@@ -876,36 +806,36 @@ with tab_print:
         csv_bytes = edited_df.to_csv(index=False).encode('utf-8-sig')
         st.download_button(label="💾 下載暫存檔", data=csv_bytes, file_name=f"調代課暫存_{datetime.date.today().strftime('%Y%m%d')}.csv", mime="text/csv", use_container_width=True)
 
-    st.divider()
-    st.markdown("#### 🔒 本機資料恢復 (選填)")
-    uploaded_file = st.file_uploader("📂 若有先前下載的暫存檔 (.csv)，請在此上傳恢復：", type=["csv"])
-    if uploaded_file is not None and ('last_uploaded_id' not in st.session_state or st.session_state.last_uploaded_id != uploaded_file.file_id):
-        try:
-            df_upload = pd.read_csv(uploaded_file, keep_default_na=False, dtype=str)
-            if "日期" in df_upload.columns: df_upload["日期"] = pd.to_datetime(df_upload["日期"], errors='coerce').dt.date
-            if "勾選列印資料" in df_upload.columns: df_upload["勾選列印資料"] = df_upload["勾選列印資料"].astype(str).str.lower() == 'true'
-            for col in ["配對編號", "班級", "節次", "科目", "老師", "調/代課"]:
-                if col in df_upload.columns: df_upload[col] = df_upload[col].astype(str)
-            st.session_state.res_data = df_upload
-            st.session_state.last_uploaded_id = uploaded_file.file_id
-            st.rerun() 
-        except Exception as e: st.error(f"❌ 檔案讀取失敗: {e}")
+    with st.expander("🛠️ 進階：本機資料恢復 (上傳暫存檔)"):
+        uploaded_file = st.file_uploader("📂 若有先前下載的暫存檔 (.csv)，請在此上傳恢復：", type=["csv"])
+        if uploaded_file is not None and ('last_uploaded_id' not in st.session_state or st.session_state.last_uploaded_id != uploaded_file.file_id):
+            try:
+                df_upload = pd.read_csv(uploaded_file, keep_default_na=False, dtype=str)
+                if "日期" in df_upload.columns: df_upload["日期"] = pd.to_datetime(df_upload["日期"], errors='coerce').dt.date
+                if "勾選列印資料" in df_upload.columns: df_upload["勾選列印資料"] = df_upload["勾選列印資料"].astype(str).str.lower() == 'true'
+                for col in ["配對編號", "班級", "節次", "科目", "老師", "調/代課"]:
+                    if col in df_upload.columns: df_upload[col] = df_upload[col].astype(str)
+                st.session_state.res_data = df_upload
+                st.session_state.last_uploaded_id = uploaded_file.file_id
+                st.rerun() 
+            except Exception as e: st.error(f"❌ 檔案讀取失敗: {e}")
 
-    st.divider()
-    if issue_unit.strip() == "ＯＯＯ老師": st.error("⚠️ 提醒：請在最上方修改「發放單位」(預設為ＯＯＯ老師) 後，即可解鎖列印與下載功能。")
-    else:
-        data_docx = create_docx(sch_year, sch_term, issue_unit, edited_df)
-        if data_docx:
-            col_word, col_pdf = st.columns([1, 1])
-            with col_word: st.download_button("📥 下載 Word 檔 (可編輯)", data_docx, f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
-            with col_pdf:
-                if st.button("📥 轉換並下載 PDF (手機建議)", use_container_width=True, type="primary"):
-                    with st.spinner("🚀 伺服器正在努力轉換中 (約需 5~10 秒，請耐心等候)..."):
-                        pdf_data = docx_to_pdf(data_docx)
-                        if pdf_data:
-                            st.success("✅ 轉換成功！檔案已自動下載。")
-                            b64_pdf = base64.b64encode(pdf_data).decode('utf-8')
-                            pdf_filename = f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.pdf"
-                            components.html(f"<script>setTimeout(function() {{ const link = window.parent.document.createElement('a'); link.href = 'data:application/octet-stream;base64,{b64_pdf}'; link.download = '{pdf_filename}'; window.parent.document.body.appendChild(link); link.click(); window.parent.document.body.removeChild(link); }}, 300);</script>", height=0, width=0)
-                            st.download_button("備用：若未自動下載請點此", pdf_data, pdf_filename, mime="application/pdf", use_container_width=True)
-                        else: st.error("❌ 轉換失敗，伺服器過度繁忙或缺少套件。")
+    st.markdown("### 🖨️ 列印與輸出")
+    with st.container(border=True):
+        if issue_unit.strip() == "ＯＯＯ老師": st.error("⚠️ 提醒：請在上方修改「發放單位」(預設為ＯＯＯ老師) 後，即可解鎖列印與下載功能。")
+        else:
+            data_docx = create_docx(sch_year, sch_term, issue_unit, edited_df)
+            if data_docx:
+                col_word, col_pdf = st.columns([1, 1])
+                with col_word: st.download_button("📥 下載 Word 檔 (可編輯)", data_docx, f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
+                with col_pdf:
+                    if st.button("📥 轉換並下載 PDF (手機建議)", use_container_width=True, type="primary"):
+                        with st.spinner("🚀 伺服器正在努力轉換中 (約需 5~10 秒，請耐心等候)..."):
+                            pdf_data = docx_to_pdf(data_docx)
+                            if pdf_data:
+                                st.success("✅ 轉換成功！檔案已自動下載。")
+                                b64_pdf = base64.b64encode(pdf_data).decode('utf-8')
+                                pdf_filename = f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.pdf"
+                                components.html(f"<script>setTimeout(function() {{ const link = window.parent.document.createElement('a'); link.href = 'data:application/octet-stream;base64,{b64_pdf}'; link.download = '{pdf_filename}'; window.parent.document.body.appendChild(link); link.click(); window.parent.document.body.removeChild(link); }}, 300);</script>", height=0, width=0)
+                                st.download_button("備用：若未自動下載請點此", pdf_data, pdf_filename, mime="application/pdf", use_container_width=True)
+                            else: st.error("❌ 轉換失敗，伺服器過度繁忙或缺少套件。")
