@@ -530,7 +530,7 @@ def check_destination_conflict(df, teacher, date_val, period):
     conflict = processed_df[(processed_df['老師'] == teacher) & (p_dates == date_str) & (processed_df['節次'] == period) & (processed_df['調/代課'] != '空堂X')]
     return not conflict.empty
 
-# 【修改1】：黑底白字，確保 🌟按鈕無底色淡色系
+# 【修改點】：使用莫蘭迪灰藍底色取代沉重的黑色，提升閱讀舒適度
 def style_my_grid(val):
     val_str = str(val)
     if "🔄" in val_str: 
@@ -542,7 +542,7 @@ def style_my_grid(val):
     elif "🌟" in val_str: 
         return "color: #0066cc; font-weight: normal; background-color: transparent;" # 淺藍字無底色
     elif "班" in val_str:
-        return "color: #ffffff; font-weight: bold; background-color: #2b2b2b;" # 黑底白字 (深灰黑)
+        return "color: #2c3e50; font-weight: bold; background-color: #e2e8f0;" # 溫和的莫蘭迪灰藍底色配深色字
     return ""
 
 def style_target_grid(val):
@@ -550,7 +550,7 @@ def style_target_grid(val):
     if '\u200b' in val_str: 
         return "color: #ffffff; font-weight: bold; background-color: #d9534f;" # 新入的課也用紅底白字
     elif "班" in val_str:
-        return "color: #ffffff; font-weight: bold; background-color: #2b2b2b;" # 對方的課表也黑底白字
+        return "color: #2c3e50; font-weight: bold; background-color: #e2e8f0;" # 對方的課表也使用灰藍底色
     return ""
 
 day_en = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
@@ -681,7 +681,7 @@ with tab_visual:
 
 # ----------------- Tab 3: 🚧 終極整合模式 (開發中) -----------------
 with tab_unified:
-    st.markdown("### 🧩 智慧調課 (整合直接互調、三角、跨班連鎖)")
+    st.markdown("### 🧩 智慧調課")
     pwd = st.text_input("🔒 進入開發者模式請輸入密碼：", type="password", key="pwd_unified")
     
     if pwd != "0000":
@@ -698,7 +698,6 @@ with tab_unified:
             
             with col_c1:
                 st.subheader("📅 第一步：選擇要調走的課")
-                # 【修改3】：加入一鍵解鎖的 Toggle
                 advanced_mode = st.toggle("🚀 一鍵解鎖進階多角調 (跨班連鎖/三角調)", value=False)
                 
                 # 建立網格與套用資料
@@ -716,10 +715,10 @@ with tab_unified:
                         c = day_en.index(opt['Day_B'])
                         if opt['direct']:
                             uni_display_grid.iloc[r, c] = f"🌟互\n{opt['Teacher_B']}"
-                        elif advanced_mode: # 只有當開關打開時，才顯示多角調的連結
+                        elif advanced_mode: 
                             uni_display_grid.iloc[r, c] = f"🔗多\n{opt['Teacher_B']}"
 
-                # 根據開關狀態顯示不同的 HTML 說明
+                # 根據開關狀態顯示不同的 HTML 說明 (移除多餘文字，統一操作說明)
                 if advanced_mode:
                     st.markdown("""
                     <div style="padding: 15px; background-color: #eef4ff; border-radius: 8px; margin-bottom: 15px;">
@@ -731,7 +730,7 @@ with tab_unified:
                     st.markdown("""
                     <div style="padding: 15px; background-color: #eef4ff; border-radius: 8px; margin-bottom: 15px;">
                         🎯 <b>操作步驟：</b> 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟老師名字</b></span> 進行互調。<br><br>
-                        <span style="color: #0066cc;"><b>🌟互</b></span>：兩人互調 (可解決95%以上的調課需求)
+                        <span style="color: #0066cc;"><b>🌟互</b></span>：兩人互調
                     </div>
                     """, unsafe_allow_html=True)
                 
@@ -816,7 +815,7 @@ with tab_unified:
                                     st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
                                     st.success("✅ 已成功加入！請切換至第二步查看。")
                                 
-                    elif advanced_mode: # 【修改3】：只有開關打開時，才執行右側的多角調邏輯
+                    elif advanced_mode:
                         # --- 跨班連鎖 / 三角調 UI ---
                         st.subheader(f"💡 請選擇協助的［橋樑］老師")
                         bridge_options = {}
