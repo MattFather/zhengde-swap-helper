@@ -528,8 +528,10 @@ def check_destination_conflict(df, teacher, date_val, period):
 
 def style_my_grid(val):
     val_str = str(val)
-    if "🌟直接互換" in val_str: return "color: #0066cc; background-color: #e6f2ff;" 
-    elif "🔗進階方案" in val_str: return "color: #cc6600; background-color: #fff3e6;" 
+    if "🌟互" in val_str: return "color: #0066cc; background-color: #e6f2ff;" 
+    elif "🔗多" in val_str: return "color: #cc6600; background-color: #fff3e6;" 
+    elif "🌟" in val_str: return "color: #0066cc; background-color: #f0f8ff;" # Tab 1
+    elif "🔺" in val_str: return "color: #cc6600; background-color: #fff3e6;" # Tab 1
     elif "🔄" in val_str: return "color: #d9534f; font-weight: bold; background-color: #fdf5f5;"
     return ""
 
@@ -627,7 +629,7 @@ with tab_visual:
 
         with col_right:
             if st.session_state.target_teacher:
-                st.subheader(f"👀 【{st.session_state.target_teacher}老師】調課後狀態")
+                st.subheader(f"👀 {st.session_state.target_teacher}老師的課表變化")
                 target_grid = create_schedule_grid(df, st.session_state.target_teacher)
                 target_grid.iloc[st.session_state.target_period - 1, day_en.index(st.session_state.target_day_en)] = "" 
                 target_grid.iloc[st.session_state.source_period - 1, day_en.index(st.session_state.source_day_en)] = f"{st.session_state.source_class}班\n{st.session_state.target_subject}\u200b"
@@ -766,9 +768,9 @@ with tab_unified:
                     r = opt['Period_B'] - 1
                     c = day_en.index(opt['Day_B'])
                     if opt['direct']:
-                        uni_display_grid.iloc[r, c] = f"🌟直接互換\n{opt['Teacher_B']}"
+                        uni_display_grid.iloc[r, c] = f"🌟互\n{opt['Teacher_B']}"
                     else:
-                        uni_display_grid.iloc[r, c] = f"🔗進階方案\n{opt['Teacher_B']}"
+                        uni_display_grid.iloc[r, c] = f"🔗多\n{opt['Teacher_B']}"
             
             col_c1, col_c2 = st.columns([1, 1.2], gap="large")
             
@@ -823,7 +825,7 @@ with tab_unified:
                     
                     if opt['direct']:
                         # --- 純直接互換 UI ---
-                        st.subheader(f"👀 【{opt['Teacher_B']}老師】調課視覺化")
+                        st.subheader(f"👀 {opt['Teacher_B']}老師的課表變化")
                         grid_b = create_schedule_grid(df, opt['Teacher_B'])
                         grid_b.iloc[opt['Period_B'] - 1, day_en.index(opt['Day_B'])] = "" 
                         grid_b.iloc[st.session_state.uni_source_period - 1, day_en.index(st.session_state.uni_source_day_en)] = f"{st.session_state.uni_source_class}班\n{opt['Subject_X']}\u200b"
@@ -852,12 +854,12 @@ with tab_unified:
                                 st.success("✅ 已成功加入！請至第二步查看。")
                                 
                     else:
-                        # --- 跨班連鎖 / 三角互調 UI (去除冗長文字，改用下拉與視覺化) ---
-                        st.subheader(f"💡 請選擇協助的 C 老師")
+                        # --- 跨班連鎖 / 三角互調 UI ---
+                        st.subheader(f"💡 請選擇協助的［橋樑］老師")
                         bridge_options = {}
                         for c in opt['chains']:
-                            t_type = "跨班連鎖" if c['type'] == 'chain' else "三角互調"
-                            label = f"[{t_type}] {c['Teacher_C']}老師 (接手 {c['Class_W']}班)"
+                            t_type = "跨班連鎖" if c['type'] == 'chain' else "三角調"
+                            label = f"[{t_type}] {c['Teacher_C']}老師"
                             bridge_options[label] = c
                             
                         selected_bridge = st.selectbox("請由下方選單挑選解救者：", list(bridge_options.keys()))
@@ -892,7 +894,7 @@ with tab_unified:
                             try: st.dataframe(grid_c.style.map(style_target_grid), use_container_width=True, height=250)
                             except AttributeError: st.dataframe(grid_c.style.applymap(style_target_grid), use_container_width=True, height=250)
 
-                        st.markdown("### 📥 視覺確認無誤後，加入列印清單")
+                        st.markdown("### 📥 將此配對加入列印清單")
                         day_b_zh = [k for k, v in day_map_rev.items() if v == opt['Day_B']][0]
                         day_c_zh = [k for k, v in day_map_rev.items() if v == c_data['Day_C']][0]
                         
