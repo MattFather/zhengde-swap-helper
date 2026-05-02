@@ -452,11 +452,10 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df):
 # ================= 5. 系統狀態記憶與初始化 =================
 state_keys = [
     "last_user_name", "uni_source_class", "uni_source_subject", "uni_source_period", "uni_source_day_en", "uni_source_day_zh", 
-    "uni_last_clicked_cell", "uni_target_tb", "grid_key"
+    "uni_last_clicked_cell", "uni_target_tb"
 ]
 for key in state_keys:
-    if key not in st.session_state: 
-        st.session_state[key] = 0 if key == "grid_key" else None
+    if key not in st.session_state: st.session_state[key] = None
 
 if 'res_data' not in st.session_state:
     st.session_state.res_data = pd.DataFrame({
@@ -556,7 +555,7 @@ with col_top2:
 
 if my_name and my_name != st.session_state.last_user_name:
     for k in state_keys: 
-        st.session_state[k] = 0 if k == "grid_key" else None
+        st.session_state[k] = None
     st.session_state.last_user_name = my_name
 
 st.markdown("---")
@@ -573,14 +572,7 @@ with tab_swap:
         col_c1, col_c2 = st.columns([1, 1.2], gap="large")
         
         with col_c1:
-            c_title, c_btn = st.columns([2.5, 1.5])
-            with c_title:
-                st.subheader(f"📅 【{my_name}老師】的課表")
-            with c_btn:
-                st.markdown("<div style='margin-top: 5px;'></div>", unsafe_allow_html=True)
-                if st.button("🔄 排序跑版重置", use_container_width=True, help="若誤觸星期表頭導致順序亂掉，點此可立即恢復"):
-                    st.session_state.grid_key = (st.session_state.get("grid_key") or 0) + 1
-                    st.rerun()
+            st.subheader(f"📅 【{my_name}老師】的課表")
             
             advanced_mode = st.session_state.get("advanced_toggle", False)
             
@@ -588,13 +580,11 @@ with tab_swap:
                 if advanced_mode:
                     st.markdown("""
                         🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟</b></span> 或 <span style="color: #e67e22;"><b>🔗老師名字</b></span> 選擇對象。<br><br>
-                        <span style="color: #0066cc;"><b>🌟互</b></span>：兩人互調 &emsp; | &emsp; <span style="color: #e67e22;"><b>🔗多</b></span>：跨班連鎖或三角調<br>
-                        <span style="font-size: 0.9em; color: #666;">💡 若誤點表頭導致排序跑掉，請點擊右上方「🔄 排序跑版重置」。</span>
+                        <span style="color: #0066cc;"><b>🌟互</b></span>：兩人互調 &emsp; | &emsp; <span style="color: #e67e22;"><b>🔗多</b></span>：跨班連鎖或三角調
                     """, unsafe_allow_html=True)
                 else:
                     st.markdown("""
                         🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟 老師名字</b></span> 進行互調。<br>
-                        <span style="font-size: 0.9em; color: #666;">💡 若誤點表頭導致排序跑掉，請點擊右上方「🔄 排序跑版重置」。</span>
                     """, unsafe_allow_html=True)
 
             uni_my_grid = create_schedule_grid(df, my_name)
@@ -620,8 +610,7 @@ with tab_swap:
             try: styled_uni_grid = uni_display_grid.style.map(style_my_grid)
             except AttributeError: styled_uni_grid = uni_display_grid.style.applymap(style_my_grid)
 
-            grid_key_str = f"uni_schedule_grid_{st.session_state.get('grid_key', 0)}"
-            event_uni = st.dataframe(styled_uni_grid, use_container_width=True, height=320, on_select="rerun", selection_mode="single-cell", key=grid_key_str)
+            event_uni = st.dataframe(styled_uni_grid, use_container_width=True, height=320, on_select="rerun", selection_mode="single-cell", key="uni_schedule_grid")
 
             st.markdown("<br>", unsafe_allow_html=True)
             st.toggle("🚀 一鍵解鎖進階多角調 (連鎖/三角)", key="advanced_toggle")
