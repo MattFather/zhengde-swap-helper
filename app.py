@@ -582,15 +582,16 @@ if my_name and my_name != st.session_state.last_user_name:
     st.session_state.last_user_name = my_name
 
     # ==============================================================
-    # 🌟 這裡就是向 Google Sheets 發送資料的魔法！
+    # 🌟 Google Sheets 發送資料魔法 (已改為穩定的 GET 方法)
     # ==============================================================
-    API_URL = "https://script.google.com/macros/s/AKfycbzlk8-pGvH1S83NWfQ3ThHaLNYjTksmu81-liK0MvouHhh_FV0ZpiotOMZAgKSPNk50rw/exec"
+    # 記得要把名字當作參數接在網址後面
+    API_URL = f"https://script.google.com/macros/s/AKfycbzlk8-pGvH1S83NWfQ3ThHaLNYjTksmu81-liK0MvouHhh_FV0ZpiotOMZAgKSPNk50rw/exec?name={my_name}"
     
     try:
-        # 使用 requests 在背景偷偷發送資料 (不會卡住網頁)
-        requests.post(API_URL, data={"name": my_name}, timeout=2)
+        # 改用 GET 並且把 timeout 放寬到 5 秒
+        requests.get(API_URL, timeout=5)
     except Exception:
-        pass # 如果網路問題傳送失敗，就偷偷忽略，不影響老師使用
+        pass # 如果網路卡住就不理它，不影響老師使用
 
 st.markdown("---")
 
@@ -827,7 +828,7 @@ with tab_swap:
 # ----------------- Tab 2: 🖨️ 第二步：列印單據與輸出 -----------------
 with tab_print:
     with st.container(border=True):
-        st.markdown("<div class='sub-title'>⚙️ 單據表頭設定</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sub-title'>⚙️ 通知單標題設定</div>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         with c1: sch_year = st.text_input("學年度", value="114")
         with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
