@@ -505,19 +505,46 @@ day_en = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 day_zh = ['星期一', '星期二', '星期三', '星期四', '星期五']
 day_map_rev = dict(zip(day_zh, day_en))
 
+# 渲染傳送門的自訂 HTML JS 按鈕
 def render_jump_button():
-    jump_html = '''
-    <button onclick="
-        var tabs = window.parent.document.querySelectorAll('button[data-baseweb=&quot;tab&quot;]');
-        if(tabs.length > 1){
-            tabs[1].click();
-            window.parent.scrollTo({top: 0, behavior: 'smooth'});
+    jump_html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    body { margin: 0; padding: 0; font-family: "Source Sans Pro", sans-serif; }
+    .btn {
+        width: 100%;
+        padding: 0.8rem;
+        background-color: #28a745;
+        color: white;
+        border: none;
+        border-radius: 0.5rem;
+        cursor: pointer;
+        font-size: 1.1rem;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        transition: background-color 0.2s;
+    }
+    .btn:hover { background-color: #218838; }
+    </style>
+    </head>
+    <body>
+    <button class="btn" onclick="
+        const doc = window.parent.document;
+        const tabs = doc.querySelectorAll('[data-baseweb=\\'tab\\']');
+        for(let i=0; i<tabs.length; i++) {
+            if(tabs[i].textContent.includes('第二步')) {
+                tabs[i].click();
+                doc.defaultView.scrollTo({top: 0, behavior: 'smooth'});
+                break;
+            }
         }
-    " style="width: 100%; padding: 0.8rem; background-color: #28a745; color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 1.1rem; font-weight: bold; margin-top: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: opacity 0.3s;">
-        👉 點此跳轉至【🖨️ 第二步：列印單據與輸出】
-    </button>
-    '''
-    st.markdown(jump_html, unsafe_allow_html=True)
+    ">👉 點此跳轉至【🖨️ 第二步：列印單據與輸出】</button>
+    </body>
+    </html>
+    """
+    components.html(jump_html, height=55)
 
 # ================= 6. UI 版面佈局 =================
 st.title("🏫 正德調課小幫手 ＆ 列印整合系統")
@@ -548,10 +575,10 @@ with tab_swap:
         with col_c1:
             st.subheader(f"📅 【{my_name}老師】的課表")
             
+            advanced_mode = st.session_state.get("advanced_toggle", False)
+            
             # 使用卡片整合控制區
             with st.container(border=True):
-                advanced_mode = st.session_state.get("advanced_toggle", False)
-                
                 if advanced_mode:
                     st.markdown("""
                         🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟</b></span> 或 <span style="color: #e67e22;"><b>🔗老師名字</b></span> 選擇對象。<br><br>
@@ -561,8 +588,6 @@ with tab_swap:
                     st.markdown("""
                         🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟 老師名字</b></span> 進行互調。<br>
                     """, unsafe_allow_html=True)
-
-                st.toggle("🚀 一鍵解鎖進階多角調 (連鎖/三角)", key="advanced_toggle")
 
             uni_my_grid = create_schedule_grid(df, my_name)
             uni_display_grid = uni_my_grid.copy()
@@ -588,6 +613,9 @@ with tab_swap:
             except AttributeError: styled_uni_grid = uni_display_grid.style.applymap(style_my_grid)
 
             event_uni = st.dataframe(styled_uni_grid, use_container_width=True, height=320, on_select="rerun", selection_mode="single-cell", key="uni_schedule_grid")
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            st.toggle("🚀 一鍵解鎖進階多角調 (連鎖/三角)", key="advanced_toggle")
 
             selection_uni = event_uni.selection.cells
             if selection_uni:
@@ -636,7 +664,6 @@ with tab_swap:
                     try: st.dataframe(grid_b.style.map(style_target_grid), use_container_width=True, height=320)
                     except AttributeError: st.dataframe(grid_b.style.applymap(style_target_grid), use_container_width=True, height=320)
                     
-                    # 放入卡片中，增加完成感
                     with st.container(border=True):
                         st.markdown("#### 📥 確認無誤，加入列印清單")
                         col_d1, col_d2, col_btn = st.columns([2, 2, 1.5])
@@ -759,10 +786,8 @@ with tab_swap:
                                     ])
                                     st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
                                     
-                                st.success("✅ 方案已成功加入！")
+                                st.success("✅ 方案已加入！")
                                 render_jump_button()
-    else:
-        st.info("👋 歡迎！請先在最上方選擇您的名字以顯示課表。")
 
 # ----------------- Tab 2: 🖨️ 第二步：列印單據與輸出 -----------------
 with tab_print:
