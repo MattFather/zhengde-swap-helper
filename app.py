@@ -547,7 +547,7 @@ def render_jump_button():
     components.html(jump_html, height=55)
 
 # ================= 6. UI 版面佈局 =================
-st.title("🏫 正德調課小幫手 ＆ 列印整合系統")
+st.title("🏫 正德調課小幫手")
 
 # 【全域選單】居中顯示
 col_top1, col_top2, col_top3 = st.columns([1, 2, 1])
