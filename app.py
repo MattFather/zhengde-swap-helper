@@ -174,7 +174,7 @@ def set_chinese_font(doc, font_name='標楷體'):
     doc.styles['Normal']._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
 
 # ----------------- 專屬教務處的直式公版表單 -----------------
-def add_official_form(doc, sch_year, my_name, form_rows):
+def add_official_form(doc, sch_year, my_name, leave_type, form_rows):
     section = doc.sections[0]
     section.orient = WD_ORIENT.PORTRAIT
     section.page_width = Cm(21.0)
@@ -216,8 +216,17 @@ def add_official_form(doc, sch_year, my_name, form_rows):
         run_s1 = p_sub.add_run("       教師 ")
         run_s2 = p_sub.add_run(f"{display_name}")
         run_s2.underline = True
-        run_s3 = p_sub.add_run(f"      假    日期：自  {date_str}")
-        for r in [run_s1, run_s2, run_s3]: r.font.size = Pt(12)
+        
+        # 🌟 將假別自動填入，並保持完美的底線格式
+        if leave_type:
+            run_s3 = p_sub.add_run("      ")
+            run_s4 = p_sub.add_run(f"{leave_type}")
+            run_s4.underline = True
+            run_s5 = p_sub.add_run(f"    日期：自  {date_str}")
+            for r in [run_s1, run_s2, run_s3, run_s4, run_s5]: r.font.size = Pt(12)
+        else:
+            run_s3 = p_sub.add_run(f"      假    日期：自  {date_str}")
+            for r in [run_s1, run_s2, run_s3]: r.font.size = Pt(12)
 
         table = doc.add_table(rows=7, cols=4)
         table.style = 'Table Grid'
@@ -532,7 +541,7 @@ def process_swap_logic(df):
     for _, r in no_id.iterrows(): df_result.append(r)
     return pd.DataFrame(df_result)
 
-def create_docx(sch_year, sch_term, issue_unit, edited_df, my_name):
+def create_docx(sch_year, sch_term, issue_unit, leave_type, edited_df, my_name):
     doc = Document()
     set_chinese_font(doc, '標楷體')
 
@@ -581,7 +590,7 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df, my_name):
             "t_teacher": row['老師']
         })
 
-    add_official_form(doc, sch_year, my_name, form_rows[:6])
+    add_official_form(doc, sch_year, my_name, leave_type, form_rows[:6])
 
     new_section = doc.add_section()
     new_section.orient = WD_ORIENT.LANDSCAPE
@@ -633,7 +642,6 @@ state_keys = [
 for key in state_keys:
     if key not in st.session_state: st.session_state[key] = None
 
-# 初始化與資料防呆強制轉型
 if 'res_data' not in st.session_state:
     st.session_state.res_data = pd.DataFrame({
         "勾選列印資料": pd.Series(dtype='bool'), "配對編號": pd.Series(dtype='str'), "班級": pd.Series(dtype='str'),
@@ -908,7 +916,6 @@ with tab_swap:
                                     conflict = True
                                     
                                 if not conflict:
-                                    # 強制型態轉換寫入
                                     new_row = pd.DataFrame([{
                                         "勾選列印資料": True, 
                                         "配對編號": "", 
@@ -963,7 +970,6 @@ with tab_swap:
                                     current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
                                     next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
                                     
-                                    # 強制型態轉換寫入
                                     new_rows = pd.DataFrame([
                                         {"勾選列印資料": True, "配對編號": str(next_id), "班級": str(st.session_state.uni_source_class), "日期": pd.to_datetime(date_mine), "節次": str(p_m_str), "科目": str(st.session_state.uni_source_subject).strip(), "老師": str(my_name).strip(), "調/代課": "調課"},
                                         {"勾選列印資料": True, "配對編號": str(next_id), "班級": str(st.session_state.uni_source_class), "日期": pd.to_datetime(date_target), "節次": str(p_t_str), "科目": str(opt['Subject_X']).strip(), "老師": str(opt['Teacher_B']).strip(), "調/代課": "調課"}
@@ -1042,7 +1048,6 @@ with tab_swap:
                                     next_id_1 = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
                                     next_id_2 = str(int(current_ids.max() + 2)) if not current_ids.empty else "2"
                                     
-                                    # 強制型態轉換寫入
                                     group1 = pd.DataFrame([
                                         {"勾選列印資料": True, "配對編號": str(next_id_1), "班級": str(st.session_state.uni_source_class), "日期": pd.to_datetime(date_mine), "節次": str(p_mine_str), "科目": str(st.session_state.uni_source_subject).strip(), "老師": str(my_name).strip(), "調/代課": "調課"},
                                         {"勾選列印資料": True, "配對編號": str(next_id_1), "班級": str(st.session_state.uni_source_class), "日期": pd.to_datetime(date_b), "節次": str(p_b_str), "科目": str(opt['Subject_X']).strip(), "老師": str(opt['Teacher_B']).strip(), "調/代課": "調課"}
@@ -1070,10 +1075,14 @@ with tab_swap:
 with tab_print:
     with st.container(border=True):
         st.markdown("<div class='sub-title'>⚙️ 單據表頭設定</div>", unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
+        # 🌟 擴充欄位加入「假別」選單
+        c1, c2, c3, c4 = st.columns([1, 1, 1, 1.5])
         with c1: sch_year = st.text_input("學年度", value="114")
         with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
         with c3: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
+        
+        leave_options = ["", "事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
+        with c4: leave_type = st.selectbox("假別 (教務處存查聯用)", leave_options, index=0)
 
     df_subs = df['Subject'].dropna().astype(str).str.strip().unique().tolist()
     base_subs = ["", "國文", "英文", "數學", "生物", "理化", "地科", "地理", "歷史", "公民", "體育", "健康", "視藝", "表藝", "音樂", "家政", "童軍", "輔導", "資訊", "生科", "本土語"]
@@ -1081,15 +1090,12 @@ with tab_print:
 
     st.markdown("<div class='sub-title' style='margin-top: 20px;'>📝 待列印清單編輯區</div>", unsafe_allow_html=True)
     
-    if 'res_data' not in st.session_state:
-        st.session_state.res_data = pd.DataFrame({"勾選列印資料": pd.Series(dtype='bool'), "配對編號": pd.Series(dtype='str'), "班級": pd.Series(dtype='str'), "日期": pd.Series(dtype='datetime64[ns]'), "節次": pd.Series(dtype='str'), "科目": pd.Series(dtype='str'), "老師": pd.Series(dtype='str'), "調/代課": pd.Series(dtype='str')})
-
-    # 確保資料格式絕對乾淨，避免 data_editor 報錯
     if not st.session_state.res_data.empty:
         st.session_state.res_data["日期"] = pd.to_datetime(st.session_state.res_data["日期"], errors='coerce')
         st.session_state.res_data["勾選列印資料"] = st.session_state.res_data["勾選列印資料"].astype(bool)
         for col in ["配對編號", "班級", "節次", "科目", "老師", "調/代課"]:
-            st.session_state.res_data[col] = st.session_state.res_data[col].fillna("").astype(str).replace(['nan', 'None', 'NaN'], '').str.strip()
+            st.session_state.res_data[col] = st.session_state.res_data[col].fillna("").astype(str)
+            st.session_state.res_data.loc[st.session_state.res_data[col] == "nan", col] = ""
 
     edited_df = st.data_editor(
         st.session_state.res_data,
@@ -1104,7 +1110,6 @@ with tab_print:
         num_rows="dynamic", use_container_width=True, hide_index=True, column_order=("勾選列印資料", "配對編號", "班級", "日期", "節次", "科目", "老師", "調/代課")
     )
     
-    # 解決資料被洗掉的 Bug：只有在真的有變動時才更新 state
     if not edited_df.equals(st.session_state.res_data):
         st.session_state.res_data = edited_df
 
@@ -1132,7 +1137,8 @@ with tab_print:
     with st.container(border=True):
         if issue_unit.strip() == "ＯＯＯ老師": st.error("⚠️ 提醒：請在上方修改「發放單位」(預設為ＯＯＯ老師) 後，即可解鎖列印與下載功能。")
         else:
-            data_docx = create_docx(sch_year, sch_term, issue_unit, edited_df, my_name)
+            # 🌟 傳入 leave_type
+            data_docx = create_docx(sch_year, sch_term, issue_unit, leave_type, edited_df, my_name)
             if data_docx:
                 col_word, col_pdf = st.columns([1, 1])
                 with col_word: st.download_button("📥 下載 Word 檔 (可編輯)", data_docx, f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
