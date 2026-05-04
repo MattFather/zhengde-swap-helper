@@ -255,7 +255,7 @@ def add_official_form(doc, sch_year, my_name, form_rows):
                 o_date = row_data['o_date']
                 if pd.notnull(o_date):
                     o_w_map = {0:"一", 1:"二", 2:"三", 3:"四", 4:"五", 5:"六", 6:"日"}
-                    o_m, o_d = o_date.month, o_date.day  # 🚨 這裡已修復之前的隱藏變數地雷
+                    o_m, o_d = o_date.month, o_date.day  # 🚨 這裡已經正確寫入變數
                     o_w = o_w_map.get(o_date.weekday(), " ")
                 else:
                     o_m, o_d, o_w = "  ", "  ", "  "
@@ -784,7 +784,6 @@ with tab_swap:
             with col_t2: substitute_mode = st.toggle("🆘 尋找代課老師", key="substitute_toggle")
             
             with st.container(border=True):
-                # 🚨 【錯誤修復區】：這裡原本因為雙引號包雙引號導致崩潰，現已全部改為內部使用單引號。
                 if substitute_mode:
                     st.markdown("🎯 **操作步驟：** 1️⃣ 點擊您欲請假的班級。 2️⃣ 在右側選擇指定的代課老師。", unsafe_allow_html=True)
                 elif advanced_mode:
