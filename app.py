@@ -193,6 +193,9 @@ def add_official_form(doc, sch_year, my_name, form_rows):
         date_str = "    月    日至    月    日"
     # -------------------
 
+    # 【防呆機制】：確保 my_name 有值
+    display_name = my_name if my_name and str(my_name).strip() != "None" else "_____________"
+
     for idx, (copy_num, copy_desc) in enumerate(copies):
         # 標題行
         p_title = doc.add_paragraph()
@@ -210,10 +213,10 @@ def add_official_form(doc, sch_year, my_name, form_rows):
         # 副標題行 (教師姓名與自動請假日期)
         p_sub = doc.add_paragraph()
         p_sub.paragraph_format.space_before = Pt(0)
-        p_sub.paragraph_format.space_after = Pt(6)  # 稍微留白再接表格
+        p_sub.paragraph_format.space_after = Pt(6)  
         p_sub.alignment = WD_ALIGN_PARAGRAPH.LEFT
         run_s1 = p_sub.add_run("       教師 ")
-        run_s2 = p_sub.add_run(f"{my_name}")
+        run_s2 = p_sub.add_run(f"{display_name}")
         run_s2.underline = True
         run_s3 = p_sub.add_run(f"      假    日期：自  {date_str}")
         for r in [run_s1, run_s2, run_s3]: r.font.size = Pt(12)
@@ -221,11 +224,9 @@ def add_official_form(doc, sch_year, my_name, form_rows):
         # 建立表格
         table = doc.add_table(rows=7, cols=4)
         table.style = 'Table Grid'
-        # 強制關閉自動調整
         table.autofit = False
 
         # 【版面精準控制】：精準分配四個欄位的寬度 (總合 18.0 Cm)
-        # 強制綁定至 Columns 與 Cells 雙重屬性，確保轉 PDF 絕對不跑版
         widths = [Cm(1.5), Cm(1.5), Cm(4.0), Cm(11.0)]
         for j, w in enumerate(widths):
             table.columns[j].width = w
@@ -248,7 +249,6 @@ def add_official_form(doc, sch_year, my_name, form_rows):
         # 填入 6 行資料
         for r_idx in range(6):
             r = r_idx + 1
-            # 強制鎖死每列高度，確保兩聯能擠在同一頁 A4
             table.rows[r].height = Cm(1.3)
             table.rows[r].height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
 
@@ -291,7 +291,7 @@ def add_official_form(doc, sch_year, my_name, form_rows):
                 cell_time.text = "___月___日\n星期___ 第___節"
                 cell_desc.text = "1. 與 ___ 月 ___ 日星期 ___ 第 ___ 節 ____________ 教師調課\n2. 請 _________________________________教師代課"
 
-            # 調整文字置中與大小微調，確保絕對不會折行
+            # 調整文字置中與大小微調
             for c_idx in range(4):
                 cell = table.cell(r, c_idx)
                 cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
@@ -305,7 +305,7 @@ def add_official_form(doc, sch_year, my_name, form_rows):
                     for run in p.runs:
                         run.font.size = Pt(10.5)
 
-        # 兩聯中間的裁切線：縮減12字元，並去除多餘換行符號
+        # 兩聯中間的裁切線
         if idx == 0:
             sep = doc.add_paragraph("-" * 90)
             sep.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -550,15 +550,23 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df, my_name):
 
     # ================= 步驟一：產生直式的教務處公版表單 =================
     form_rows = []
+    
+    # 強制將 "調/代課" 轉成字串並去除空白，確保判斷正確
+    df_raw["調/代課"] = df_raw["調/代課"].fillna("").astype(str).str.strip()
     df_raw["配對編號"] = df_raw["配對編號"].fillna("").astype(str).str.strip()
+    df_raw["老師"] = df_raw["老師"].fillna("").astype(str).str.strip()
     
     # 抓取調課資料 (只抓與操作者 my_name 相關的變動)
     df_swaps = df_raw[df_raw["調/代課"] == "調課"]
     for pid in df_swaps["配對編號"].unique():
         if not pid: continue
         rows = df_swaps[df_swaps["配對編號"] == pid]
-        me_rows = rows[rows["老師"] == my_name]
-        other_rows = rows[rows["老師"] != my_name]
+        
+        # 使用安全的比對方式
+        my_name_safe = str(my_name).strip()
+        me_rows = rows[rows["老師"] == my_name_safe]
+        other_rows = rows[rows["老師"] != my_name_safe]
+        
         if not me_rows.empty and not other_rows.empty:
             row_me = me_rows.iloc[0]
             row_other = other_rows.iloc[0]
@@ -591,7 +599,6 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df, my_name):
     add_official_form(doc, sch_year, my_name, form_rows[:6])
 
     # ================= 步驟二：產生橫式的教師/班級通知單 =================
-    # 新增一個 Section 並設定為橫式
     new_section = doc.add_section()
     new_section.orient = WD_ORIENT.LANDSCAPE
     new_section.page_width = Cm(29.7)
@@ -603,14 +610,12 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df, my_name):
     df_processed = process_swap_logic(df_raw)
     all_blocks = []
 
-    # 產生「教師通知聯」
     teachers = sorted(list(set([t for t in df_processed["老師"] if t != ""])))
     for t in teachers:
         df_t = df_processed[df_processed["老師"] == t]
         t_classes = sorted(list(set([c for c in df_t["班級"] if c != ""])))
         all_blocks.append({"suffix": "教師通知聯", "label": ", ".join(t_classes), "df": df_t, "is_teacher": True, "teacher_name": f"{t}老師"})
 
-    # 產生「班級公告聯」
     classes = sorted(list(set([c for c in df_processed["班級"] if c != ""])))
     for c in classes:
         df_c = df_processed[df_processed["班級"] == c]
@@ -1069,7 +1074,6 @@ with tab_print:
     with st.container(border=True):
         if issue_unit.strip() == "ＯＯＯ老師": st.error("⚠️ 提醒：請在上方修改「發放單位」(預設為ＯＯＯ老師) 後，即可解鎖列印與下載功能。")
         else:
-            # 這裡把 my_name 傳進去給公版表單使用
             data_docx = create_docx(sch_year, sch_term, issue_unit, edited_df, my_name)
             if data_docx:
                 col_word, col_pdf = st.columns([1, 1])
