@@ -1082,7 +1082,7 @@ with tab_print:
         with c3: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
         
         leave_options = ["", "事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
-        with c4: leave_type = st.selectbox("假別 (教務處存查聯用)", leave_options, index=0)
+        with c4: leave_type = st.selectbox("假別", leave_options, index=0)
 
     df_subs = df['Subject'].dropna().astype(str).str.strip().unique().tolist()
     base_subs = ["", "國文", "英文", "數學", "生物", "理化", "地科", "地理", "歷史", "公民", "體育", "健康", "視藝", "表藝", "音樂", "家政", "童軍", "輔導", "資訊", "生科", "本土語"]
