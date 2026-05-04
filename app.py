@@ -283,8 +283,15 @@ def add_official_form(doc, sch_year, my_name, leave_type, form_rows):
                         t_m, t_d, t_w = "  ", "  ", "  "
                     t_p = row_data['t_period']
                     t_teacher = row_data['t_teacher']
-
-                    cell_desc.text = f"☑ 1. 與  {t_m} 月  {t_d} 日星期  {t_w}  第 {t_p} 節   {t_teacher}   教師調課\n☐ 2. 請 __________________________________教師代課"
+                    
+                    # 🌟 處理連鎖調課的 o_teacher 標示
+                    o_teacher = str(row_data.get('o_teacher', my_name)).strip()
+                    my_name_safe = str(my_name).strip()
+                    
+                    if o_teacher != my_name_safe:
+                        cell_desc.text = f"☑ 1. {o_teacher}老師與  {t_m} 月  {t_d} 日星期  {t_w}  第 {t_p} 節   {t_teacher}   教師調課\n☐ 2. 請 __________________________________教師代課"
+                    else:
+                        cell_desc.text = f"☑ 1. 與  {t_m} 月  {t_d} 日星期  {t_w}  第 {t_p} 節   {t_teacher}   教師調課\n☐ 2. 請 __________________________________教師代課"
                 else:
                     t_teacher = row_data['t_teacher']
                     cell_desc.text = f"☐ 1. 與 ___ 月 ___ 日星期 ___ 第 ___ 節 ____________ 教師調課\n☑ 2. 請           {t_teacher}           教師代課"
@@ -303,7 +310,7 @@ def add_official_form(doc, sch_year, my_name, leave_type, form_rows):
                     p.paragraph_format.space_after = Pt(2)
                     p.paragraph_format.space_before = Pt(2)
                     for run in p.runs:
-                        run.font.size = Pt(10.5)
+                        run.font.size = Pt(10.0) # 確保文字精確容納
 
         if idx == 0:
             sep = doc.add_paragraph("-" * 90)
@@ -556,25 +563,26 @@ def create_docx(sch_year, sch_term, issue_unit, leave_type, edited_df, my_name):
     df_swaps = df_raw[df_raw["調/代課"] == "調課"]
     for pid in df_swaps["配對編號"].unique():
         if not pid or pid == "": continue
+        
+        # 🌟 修改邏輯：完整記錄該次配對所有軌跡，不遺漏任何換課紀錄
         rows = df_swaps[df_swaps["配對編號"] == pid]
-        
-        my_name_safe = str(my_name).strip()
-        me_rows = rows[rows["老師"] == my_name_safe]
-        other_rows = rows[rows["老師"] != my_name_safe]
-        
-        if not me_rows.empty and not other_rows.empty:
-            row_me = me_rows.iloc[0]
-            row_other = other_rows.iloc[0]
-            form_rows.append({
-                "class": row_me['班級'],
-                "subject": row_me['科目'],
-                "o_date": pd.to_datetime(row_me['日期']),
-                "o_period": "".join(filter(str.isdigit, str(row_me['節次']))),
-                "type": "調課",
-                "t_date": pd.to_datetime(row_other['日期']),
-                "t_period": "".join(filter(str.isdigit, str(row_other['節次']))),
-                "t_teacher": row_other['老師']
-            })
+        n = len(rows)
+        if n >= 2:
+            for i in range(n):
+                row_o = rows.iloc[i]
+                row_t = rows.iloc[(i + 1) % n]
+                
+                form_rows.append({
+                    "class": row_o['班級'],
+                    "subject": row_o['科目'],
+                    "o_date": pd.to_datetime(row_o['日期']),
+                    "o_period": "".join(filter(str.isdigit, str(row_o['節次']))),
+                    "type": "調課",
+                    "t_date": pd.to_datetime(row_t['日期']),
+                    "t_period": "".join(filter(str.isdigit, str(row_t['節次']))),
+                    "t_teacher": row_t['老師'],
+                    "o_teacher": row_o['老師']
+                })
             
     df_subs = df_raw[df_raw["調/代課"] == "代課"]
     for _, row in df_subs.iterrows():
@@ -586,7 +594,8 @@ def create_docx(sch_year, sch_term, issue_unit, leave_type, edited_df, my_name):
             "type": "代課",
             "t_date": None,
             "t_period": "",
-            "t_teacher": row['老師']
+            "t_teacher": row['老師'],
+            "o_teacher": my_name
         })
 
     add_official_form(doc, sch_year, my_name, leave_type, form_rows[:6])
@@ -981,7 +990,6 @@ with tab_swap:
                 elif advanced_mode:
                     st.markdown("<div class='sub-title' style='font-size: 22px !important;'>💡 請選擇協助的［橋樑］老師</div>", unsafe_allow_html=True)
                     
-                    # 🌟 將日期的轉換資訊帶入選單，並加入權重排序
                     sorted_chains = sorted(
                         opt['chains'],
                         key=lambda c: (
@@ -1092,8 +1100,8 @@ with tab_print:
         with c1: sch_year = st.text_input("學年度", value="114")
         with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
         
-        leave_options = ["", "課務需求", "事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
-        with c3: leave_type = st.selectbox("假別", leave_options, index=0)
+        leave_options = ["", "事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
+        with c3: leave_type = st.selectbox("假別 (教務處存查聯用)", leave_options, index=0)
         
         with c4: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
 
