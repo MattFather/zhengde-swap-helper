@@ -4,7 +4,7 @@ from docx import Document
 from docx.shared import Cm, Pt
 from docx.enum.section import WD_ORIENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT
-from docx.enum.table import WD_ALIGN_VERTICAL
+from docx.enum.table import WD_ALIGN_VERTICAL, WD_ROW_HEIGHT_RULE
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 import io
@@ -171,31 +171,33 @@ def set_chinese_font(doc, font_name='標楷體'):
 
 # ----------------- 專屬教務處的直式公版表單 -----------------
 def add_official_form(doc, sch_year, my_name, form_rows):
-    # 設定第一節為直式 (A4 Portrait)
+    # 設定第一節為直式 (A4 Portrait)，縮小邊距確保放得下兩聯
     section = doc.sections[0]
     section.orient = WD_ORIENT.PORTRAIT
     section.page_width = Cm(21.0)
     section.page_height = Cm(29.7)
     section.left_margin = Cm(1.5)
     section.right_margin = Cm(1.5)
-    section.top_margin = Cm(1.5)
-    section.bottom_margin = Cm(1.5)
+    section.top_margin = Cm(1.2)
+    section.bottom_margin = Cm(1.2)
 
     copies = [("第一聯", "請假人保存"), ("第二聯", "教學組保存")]
 
-    # --- 計算請假區間 ---
+    # --- 計算請假區間 (自動帶入) ---
     valid_dates = [r['o_date'] for r in form_rows if pd.notnull(r['o_date'])]
     if valid_dates:
         min_date = min(valid_dates)
         max_date = max(valid_dates)
-        date_str = f"自  {min_date.month}  月  {min_date.day}  日至  {max_date.month}  月  {max_date.day}  日"
+        date_str = f"{min_date.month}  月  {min_date.day}  日至  {max_date.month}  月  {max_date.day}  日"
     else:
-        date_str = "自    月    日至    月    日"
+        date_str = "    月    日至    月    日"
     # -------------------
 
     for idx, (copy_num, copy_desc) in enumerate(copies):
         # 標題行
         p_title = doc.add_paragraph()
+        p_title.paragraph_format.space_before = Pt(0)
+        p_title.paragraph_format.space_after = Pt(0)
         p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
         tab_stops = p_title.paragraph_format.tab_stops
         tab_stops.add_tab_stop(Cm(16.5), WD_TAB_ALIGNMENT.RIGHT)
@@ -203,29 +205,32 @@ def add_official_form(doc, sch_year, my_name, form_rows):
         run_t1 = p_title.add_run(f"新北市立正德國民中學      {sch_year}學年度教師自行調補代課單\t{copy_num}")
         run_t1.bold = True
         run_t1.font.size = Pt(14)
-
         p_title.add_run(f"\n\t{copy_desc}")
 
         # 副標題行 (教師姓名與自動請假日期)
         p_sub = doc.add_paragraph()
+        p_sub.paragraph_format.space_before = Pt(0)
+        p_sub.paragraph_format.space_after = Pt(6)  # 稍微留白再接表格
         p_sub.alignment = WD_ALIGN_PARAGRAPH.LEFT
         run_s1 = p_sub.add_run("       教師 ")
         run_s2 = p_sub.add_run(f"{my_name}")
         run_s2.underline = True
-        run_s3 = p_sub.add_run(f"      假    日期：{date_str}")
+        run_s3 = p_sub.add_run(f"      假    日期：自  {date_str}")
         for r in [run_s1, run_s2, run_s3]: r.font.size = Pt(12)
 
         # 建立表格
         table = doc.add_table(rows=7, cols=4)
         table.style = 'Table Grid'
-        # 強制關閉自動調整，確保寬度設定生效
+        # 強制關閉自動調整
         table.autofit = False
 
-        # 【版面微調】：進一步縮減班級/科目，將空間給異動情形 (總合 18.0 Cm)
-        widths = [Cm(1.1), Cm(1.1), Cm(2.9), Cm(12.9)]
-        for row in table.rows:
-            for c_idx, w in enumerate(widths):
-                row.cells[c_idx].width = w
+        # 【版面精準控制】：精準分配四個欄位的寬度 (總合 18.0 Cm)
+        # 強制綁定至 Columns 與 Cells 雙重屬性，確保轉 PDF 絕對不跑版
+        widths = [Cm(1.5), Cm(1.5), Cm(4.0), Cm(11.0)]
+        for j, w in enumerate(widths):
+            table.columns[j].width = w
+            for cell in table.columns[j].cells:
+                cell.width = w
 
         headers = ["班級", "科目", "時      間", "異            動            情            形"]
         for c_idx, h in enumerate(headers):
@@ -233,16 +238,24 @@ def add_official_form(doc, sch_year, my_name, form_rows):
             cell.text = h
             cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
             cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+            cell.paragraphs[0].paragraph_format.space_before = Pt(2)
+            cell.paragraphs[0].paragraph_format.space_after = Pt(2)
+
+        # 固定標題列高度
+        table.rows[0].height = Cm(0.8)
+        table.rows[0].height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
 
         # 填入 6 行資料
         for r_idx in range(6):
             r = r_idx + 1
+            # 強制鎖死每列高度，確保兩聯能擠在同一頁 A4
+            table.rows[r].height = Cm(1.3)
+            table.rows[r].height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
+
             cell_class = table.cell(r, 0)
             cell_subj = table.cell(r, 1)
             cell_time = table.cell(r, 2)
             cell_desc = table.cell(r, 3)
-
-            table.rows[r].height = Cm(1.4) 
 
             if r_idx < len(form_rows):
                 row_data = form_rows[r_idx]
@@ -278,6 +291,7 @@ def add_official_form(doc, sch_year, my_name, form_rows):
                 cell_time.text = "___月___日\n星期___ 第___節"
                 cell_desc.text = "1. 與 ___ 月 ___ 日星期 ___ 第 ___ 節 ____________ 教師調課\n2. 請 _________________________________教師代課"
 
+            # 調整文字置中與大小微調，確保絕對不會折行
             for c_idx in range(4):
                 cell = table.cell(r, c_idx)
                 cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
@@ -288,11 +302,15 @@ def add_official_form(doc, sch_year, my_name, form_rows):
                         p.alignment = WD_ALIGN_PARAGRAPH.LEFT
                     p.paragraph_format.space_after = Pt(2)
                     p.paragraph_format.space_before = Pt(2)
+                    for run in p.runs:
+                        run.font.size = Pt(10.5)
 
-        # 兩聯中間的裁切線
+        # 兩聯中間的裁切線：縮減12字元，並去除多餘換行符號
         if idx == 0:
-            sep = doc.add_paragraph("\n------------------------------------------------------------------------------------------------------\n")
+            sep = doc.add_paragraph("-" * 90)
             sep.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            sep.paragraph_format.space_before = Pt(12)
+            sep.paragraph_format.space_after = Pt(12)
 
 # ----------------- 教師與班級通知聯 (橫式) -----------------
 def generate_timetable_block(container_cell, title_suffix, sch_year, sch_term, issue_unit, class_label, filtered_df, is_teacher_side=True, teacher_name=""):
