@@ -217,7 +217,6 @@ def add_official_form(doc, sch_year, my_name, leave_type, form_rows):
         run_s2 = p_sub.add_run(f"{display_name}")
         run_s2.underline = True
         
-        # 🌟 將假別自動填入，並保持完美的底線格式
         if leave_type:
             run_s3 = p_sub.add_run("      ")
             run_s4 = p_sub.add_run(f"{leave_type}")
@@ -1075,14 +1074,15 @@ with tab_swap:
 with tab_print:
     with st.container(border=True):
         st.markdown("<div class='sub-title'>⚙️ 單據表頭設定</div>", unsafe_allow_html=True)
-        # 🌟 擴充欄位加入「假別」選單
-        c1, c2, c3, c4 = st.columns([1, 1, 1, 1.5])
+        # 🌟 換位置：假別與發放單位互換
+        c1, c2, c3, c4 = st.columns([1, 1, 1.5, 1])
         with c1: sch_year = st.text_input("學年度", value="114")
         with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
-        with c3: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
         
         leave_options = ["", "事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
-        with c4: leave_type = st.selectbox("假別", leave_options, index=0)
+        with c3: leave_type = st.selectbox("假別 (教務處存查聯用)", leave_options, index=0)
+        
+        with c4: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
 
     df_subs = df['Subject'].dropna().astype(str).str.strip().unique().tolist()
     base_subs = ["", "國文", "英文", "數學", "生物", "理化", "地科", "地理", "歷史", "公民", "體育", "健康", "視藝", "表藝", "音樂", "家政", "童軍", "輔導", "資訊", "生科", "本土語"]
@@ -1137,7 +1137,6 @@ with tab_print:
     with st.container(border=True):
         if issue_unit.strip() == "ＯＯＯ老師": st.error("⚠️ 提醒：請在上方修改「發放單位」(預設為ＯＯＯ老師) 後，即可解鎖列印與下載功能。")
         else:
-            # 🌟 傳入 leave_type
             data_docx = create_docx(sch_year, sch_term, issue_unit, leave_type, edited_df, my_name)
             if data_docx:
                 col_word, col_pdf = st.columns([1, 1])
