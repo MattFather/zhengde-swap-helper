@@ -255,7 +255,7 @@ def add_official_form(doc, sch_year, my_name, form_rows):
                 o_date = row_data['o_date']
                 if pd.notnull(o_date):
                     o_w_map = {0:"一", 1:"二", 2:"三", 3:"四", 4:"五", 5:"六", 6:"日"}
-                    o_m, o_d = o_date.month, o_date.day
+                    o_m, o_date.month, o_date.day
                     o_w = o_w_map.get(o_date.weekday(), " ")
                 else:
                     o_m, o_d, o_w = "  ", "  ", "  "
@@ -670,11 +670,11 @@ def style_my_grid(val):
 def style_target_grid(val):
     val_str = str(val)
     if '\u200b' in val_str: 
-        return "color: #ffffff; font-weight: bold; background-color: #d9534f;" # 調課紅底
+        return "color: #ffffff; font-weight: bold; background-color: #d9534f;" 
     elif '\u200c' in val_str:
-        return "color: #ffffff; font-weight: bold; background-color: #28a745;" # 代課綠底
-    elif "⚠️衝堂" in val_str:
-        return "color: #000000; font-weight: bold; background-color: #ffc107;" # 衝堂黃底
+        return "color: #ffffff; font-weight: bold; background-color: #28a745;" 
+    elif ⚠️衝堂" in val_str:
+        return "color: #000000; font-weight: bold; background-color: #ffc107;" 
     elif "班" in val_str:
         return "color: #2c3e50; font-weight: bold; background-color: #e2e8f0;" 
     return ""
@@ -897,7 +897,7 @@ with tab_swap:
                                 if not conflict:
                                     new_row = pd.DataFrame([{
                                         "勾選列印資料": True, 
-                                        "配鎖編號": "", 
+                                        "配對編號": "", 
                                         "班級": st.session_state.uni_source_class, 
                                         "日期": pd.to_datetime(date_mine), 
                                         "節次": p_m_str, 
