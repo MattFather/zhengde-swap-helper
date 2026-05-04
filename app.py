@@ -633,6 +633,7 @@ state_keys = [
 for key in state_keys:
     if key not in st.session_state: st.session_state[key] = None
 
+# 初始化與資料防呆強制轉型
 if 'res_data' not in st.session_state:
     st.session_state.res_data = pd.DataFrame({
         "勾選列印資料": pd.Series(dtype='bool'), "配對編號": pd.Series(dtype='str'), "班級": pd.Series(dtype='str'),
@@ -753,7 +754,6 @@ st.markdown("<div class='main-title'>🏫 正德調課小幫手</div>", unsafe_a
 col_top1, col_top2, col_top3 = st.columns([1, 2, 1])
 with col_top2:
     all_teachers = sorted(df['Teacher'].dropna().unique())
-    # 🌟 恢復最乾淨的單一下拉選單
     my_name = st.selectbox("🙋‍♂️ 請選擇您的名字：", all_teachers, index=None, placeholder="請選擇...")
 
 if my_name and my_name != st.session_state.last_user_name:
@@ -784,7 +784,6 @@ with tab_swap:
             advanced_mode = st.session_state.get("advanced_toggle", False)
             substitute_mode = st.session_state.get("substitute_toggle", False)
             
-            # 🌟 操作步驟完美安插在標題下方
             with st.container(border=True):
                 if substitute_mode:
                     st.markdown("🎯 **操作步驟：** 1️⃣ 點擊您欲請假的班級。 2️⃣ 在右側選擇指定的代課老師。", unsafe_allow_html=True)
@@ -819,7 +818,6 @@ with tab_swap:
 
             event_uni = st.dataframe(styled_uni_grid, use_container_width=True, height=380, on_select="rerun", selection_mode="single-cell", key="uni_schedule_grid")
 
-            # 🌟 開關移到課表下方
             st.markdown("<br>", unsafe_allow_html=True)
             col_t1, col_t2 = st.columns(2)
             with col_t1: st.toggle("🚀 解鎖進階多角調", key="advanced_toggle")
@@ -865,7 +863,6 @@ with tab_swap:
                 st.markdown(f"<div class='sub-title'>🆘 安排代課老師</div>", unsafe_allow_html=True)
                 all_other_teachers = [t for t in all_teachers if t != my_name]
                 
-                # 🌟 代課老師選擇：雙欄位設計
                 col_sub1, col_sub2 = st.columns(2)
                 with col_sub1:
                     sub_sel = st.selectbox("🧑‍🏫 下拉選擇校內老師：", all_other_teachers, index=None, placeholder="下拉尋找或搜尋...")
@@ -911,14 +908,15 @@ with tab_swap:
                                     conflict = True
                                     
                                 if not conflict:
+                                    # 強制型態轉換寫入
                                     new_row = pd.DataFrame([{
                                         "勾選列印資料": True, 
                                         "配對編號": "", 
-                                        "班級": st.session_state.uni_source_class, 
+                                        "班級": str(st.session_state.uni_source_class), 
                                         "日期": pd.to_datetime(date_mine), 
-                                        "節次": p_m_str, 
+                                        "節次": str(p_m_str), 
                                         "科目": str(st.session_state.uni_source_subject).strip(), 
-                                        "老師": sub_teacher, 
+                                        "老師": str(sub_teacher).strip(), 
                                         "調/代課": "代課"
                                     }])
                                     st.session_state.res_data = pd.concat([st.session_state.res_data, new_row], ignore_index=True)
@@ -964,9 +962,11 @@ with tab_swap:
                                 if not conflict:
                                     current_ids = pd.to_numeric(st.session_state.res_data["配對編號"], errors='coerce').dropna()
                                     next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
+                                    
+                                    # 強制型態轉換寫入
                                     new_rows = pd.DataFrame([
-                                        {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_mine), "節次": p_m_str, "科目": str(st.session_state.uni_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
-                                        {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_target), "節次": p_t_str, "科目": str(opt['Subject_X']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"}
+                                        {"勾選列印資料": True, "配對編號": str(next_id), "班級": str(st.session_state.uni_source_class), "日期": pd.to_datetime(date_mine), "節次": str(p_m_str), "科目": str(st.session_state.uni_source_subject).strip(), "老師": str(my_name).strip(), "調/代課": "調課"},
+                                        {"勾選列印資料": True, "配對編號": str(next_id), "班級": str(st.session_state.uni_source_class), "日期": pd.to_datetime(date_target), "節次": str(p_t_str), "科目": str(opt['Subject_X']).strip(), "老師": str(opt['Teacher_B']).strip(), "調/代課": "調課"}
                                     ])
                                     st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
                                     st.success("✅ 方案已加入！")
@@ -1042,21 +1042,22 @@ with tab_swap:
                                     next_id_1 = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
                                     next_id_2 = str(int(current_ids.max() + 2)) if not current_ids.empty else "2"
                                     
+                                    # 強制型態轉換寫入
                                     group1 = pd.DataFrame([
-                                        {"勾選列印資料": True, "配對編號": next_id_1, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_mine), "節次": p_mine_str, "科目": str(st.session_state.uni_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
-                                        {"勾選列印資料": True, "配對編號": next_id_1, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_b), "節次": p_b_str, "科目": str(opt['Subject_X']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"}
+                                        {"勾選列印資料": True, "配對編號": str(next_id_1), "班級": str(st.session_state.uni_source_class), "日期": pd.to_datetime(date_mine), "節次": str(p_mine_str), "科目": str(st.session_state.uni_source_subject).strip(), "老師": str(my_name).strip(), "調/代課": "調課"},
+                                        {"勾選列印資料": True, "配對編號": str(next_id_1), "班級": str(st.session_state.uni_source_class), "日期": pd.to_datetime(date_b), "節次": str(p_b_str), "科目": str(opt['Subject_X']).strip(), "老師": str(opt['Teacher_B']).strip(), "調/代課": "調課"}
                                     ])
                                     group2 = pd.DataFrame([
-                                        {"勾選列印資料": True, "配對編號": next_id_2, "班級": c_data['Class_W'], "日期": pd.to_datetime(date_mine), "節次": p_mine_str, "科目": str(c_data['Subject_W']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"},
-                                        {"勾選列印資料": True, "配對編號": next_id_2, "班級": c_data['Class_W'], "日期": pd.to_datetime(date_c), "節次": p_c_str, "科目": str(c_data['Subject_C_W']).strip(), "老師": c_data['Teacher_C'], "調/代課": "調課"}
+                                        {"勾選列印資料": True, "配對編號": str(next_id_2), "班級": str(c_data['Class_W']), "日期": pd.to_datetime(date_mine), "節次": str(p_mine_str), "科目": str(c_data['Subject_W']).strip(), "老師": str(opt['Teacher_B']).strip(), "調/代課": "調課"},
+                                        {"勾選列印資料": True, "配對編號": str(next_id_2), "班級": str(c_data['Class_W']), "日期": pd.to_datetime(date_c), "節次": str(p_c_str), "科目": str(c_data['Subject_C_W']).strip(), "老師": str(c_data['Teacher_C']).strip(), "調/代課": "調課"}
                                     ])
                                     st.session_state.res_data = pd.concat([st.session_state.res_data, group1, group2], ignore_index=True)
                                 else:
                                     next_id = str(int(current_ids.max() + 1)) if not current_ids.empty else "1"
                                     new_rows = pd.DataFrame([
-                                        {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_mine), "節次": p_mine_str, "科目": str(st.session_state.uni_source_subject).strip(), "老師": my_name, "調/代課": "調課"},
-                                        {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_b), "節次": p_b_str, "科目": str(opt['Subject_X']).strip(), "老師": opt['Teacher_B'], "調/代課": "調課"},
-                                        {"勾選列印資料": True, "配對編號": next_id, "班級": st.session_state.uni_source_class, "日期": pd.to_datetime(date_c), "節次": p_c_str, "科目": str(c_data['Subject_W']).strip(), "老師": c_data['Teacher_C'], "調/代課": "調課"}
+                                        {"勾選列印資料": True, "配對編號": str(next_id), "班級": str(st.session_state.uni_source_class), "日期": pd.to_datetime(date_mine), "節次": str(p_mine_str), "科目": str(st.session_state.uni_source_subject).strip(), "老師": str(my_name).strip(), "調/代課": "調課"},
+                                        {"勾選列印資料": True, "配對編號": str(next_id), "班級": str(st.session_state.uni_source_class), "日期": pd.to_datetime(date_b), "節次": str(p_b_str), "科目": str(opt['Subject_X']).strip(), "老師": str(opt['Teacher_B']).strip(), "調/代課": "調課"},
+                                        {"勾選列印資料": True, "配對編號": str(next_id), "班級": str(st.session_state.uni_source_class), "日期": pd.to_datetime(date_c), "節次": str(p_c_str), "科目": str(c_data['Subject_W']).strip(), "老師": str(c_data['Teacher_C']).strip(), "調/代課": "調課"}
                                     ])
                                     st.session_state.res_data = pd.concat([st.session_state.res_data, new_rows], ignore_index=True)
                                     
@@ -1083,7 +1084,13 @@ with tab_print:
     if 'res_data' not in st.session_state:
         st.session_state.res_data = pd.DataFrame({"勾選列印資料": pd.Series(dtype='bool'), "配對編號": pd.Series(dtype='str'), "班級": pd.Series(dtype='str'), "日期": pd.Series(dtype='datetime64[ns]'), "節次": pd.Series(dtype='str'), "科目": pd.Series(dtype='str'), "老師": pd.Series(dtype='str'), "調/代課": pd.Series(dtype='str')})
 
-    # 🌟 加上 key 並移除不斷 mutate dataframe 的地雷，解決資料被洗掉的 Bug
+    # 確保資料格式絕對乾淨，避免 data_editor 報錯
+    if not st.session_state.res_data.empty:
+        st.session_state.res_data["日期"] = pd.to_datetime(st.session_state.res_data["日期"], errors='coerce')
+        st.session_state.res_data["勾選列印資料"] = st.session_state.res_data["勾選列印資料"].astype(bool)
+        for col in ["配對編號", "班級", "節次", "科目", "老師", "調/代課"]:
+            st.session_state.res_data[col] = st.session_state.res_data[col].fillna("").astype(str).replace(['nan', 'None', 'NaN'], '').str.strip()
+
     edited_df = st.data_editor(
         st.session_state.res_data,
         key="res_data_editor",
@@ -1097,6 +1104,7 @@ with tab_print:
         num_rows="dynamic", use_container_width=True, hide_index=True, column_order=("勾選列印資料", "配對編號", "班級", "日期", "節次", "科目", "老師", "調/代課")
     )
     
+    # 解決資料被洗掉的 Bug：只有在真的有變動時才更新 state
     if not edited_df.equals(st.session_state.res_data):
         st.session_state.res_data = edited_df
 
