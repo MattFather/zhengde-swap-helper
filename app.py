@@ -897,7 +897,7 @@ with tab_swap:
                                 if not conflict:
                                     new_row = pd.DataFrame([{
                                         "勾選列印資料": True, 
-                                        "配對編號": "", 
+                                        "配鎖編號": "", 
                                         "班級": st.session_state.uni_source_class, 
                                         "日期": pd.to_datetime(date_mine), 
                                         "節次": p_m_str, 
