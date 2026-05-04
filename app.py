@@ -175,8 +175,8 @@ def add_official_form(doc, sch_year, my_name, form_rows):
     section.orient = WD_ORIENT.PORTRAIT
     section.page_width = Cm(21.0)
     section.page_height = Cm(29.7)
-    section.left_margin = Cm(1.5)
-    section.right_margin = Cm(1.5)
+    section.left_margin = Cm(1.0)  # 縮減邊距以容納更寬的表格
+    section.right_margin = Cm(1.0) # 縮減邊距以容納更寬的表格
     section.top_margin = Cm(1.2)
     section.bottom_margin = Cm(1.2)
 
@@ -198,7 +198,7 @@ def add_official_form(doc, sch_year, my_name, form_rows):
         p_title.paragraph_format.space_after = Pt(0)
         p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
         tab_stops = p_title.paragraph_format.tab_stops
-        tab_stops.add_tab_stop(Cm(16.5), WD_TAB_ALIGNMENT.RIGHT)
+        tab_stops.add_tab_stop(Cm(17.5), WD_TAB_ALIGNMENT.RIGHT)
 
         run_t1 = p_title.add_run(f"新北市立正德國民中學      {sch_year}學年度教師自行調補代課單\t{copy_num}")
         run_t1.bold = True
@@ -219,7 +219,8 @@ def add_official_form(doc, sch_year, my_name, form_rows):
         table.style = 'Table Grid'
         table.autofit = False
 
-        widths = [Cm(1.5), Cm(1.5), Cm(4.0), Cm(11.0)]
+        # 【版面精準控制】：總寬度擴展至 19.0 Cm，異動情形增至 12.2 Cm
+        widths = [Cm(1.5), Cm(1.5), Cm(3.8), Cm(12.2)]
         for j, w in enumerate(widths):
             table.columns[j].width = w
             for cell in table.columns[j].cells:
@@ -255,7 +256,7 @@ def add_official_form(doc, sch_year, my_name, form_rows):
                 o_date = row_data['o_date']
                 if pd.notnull(o_date):
                     o_w_map = {0:"一", 1:"二", 2:"三", 3:"四", 4:"五", 5:"六", 6:"日"}
-                    o_m, o_d = o_date.month, o_date.day  # 🚨 這裡已經正確寫入變數
+                    o_m, o_d = o_date.month, o_date.day
                     o_w = o_w_map.get(o_date.weekday(), " ")
                 else:
                     o_m, o_d, o_w = "  ", "  ", "  "
@@ -538,13 +539,14 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df, my_name):
     # ================= 步驟一：產生直式的教務處公版表單 =================
     form_rows = []
     
-    df_raw["調/代課"] = df_raw["調/代課"].fillna("").astype(str).str.strip()
-    df_raw["配對編號"] = df_raw["配對編號"].fillna("").astype(str).str.strip()
-    df_raw["老師"] = df_raw["老師"].fillna("").astype(str).str.strip()
+    # 【清洗資料防呆】：防止匯入的舊 CSV 含有 .0 或 NaN 導致匹配失敗
+    df_raw["調/代課"] = df_raw["調/代課"].astype(str).replace(['nan', 'None', 'NaN'], '').str.strip()
+    df_raw["配對編號"] = df_raw["配對編號"].astype(str).str.replace(r'\.0$', '', regex=True).replace(['nan', 'None', 'NaN'], '').str.strip()
+    df_raw["老師"] = df_raw["老師"].astype(str).replace(['nan', 'None', 'NaN'], '').str.strip()
     
     df_swaps = df_raw[df_raw["調/代課"] == "調課"]
     for pid in df_swaps["配對編號"].unique():
-        if not pid: continue
+        if not pid or pid == "": continue
         rows = df_swaps[df_swaps["配對編號"] == pid]
         
         my_name_safe = str(my_name).strip()
@@ -1099,7 +1101,9 @@ with tab_print:
                 if "日期" in df_upload.columns: df_upload["日期"] = pd.to_datetime(df_upload["日期"], errors='coerce').dt.date
                 if "勾選列印資料" in df_upload.columns: df_upload["勾選列印資料"] = df_upload["勾選列印資料"].astype(str).str.lower() == 'true'
                 for col in ["配對編號", "班級", "節次", "科目", "老師", "調/代課"]:
-                    if col in df_upload.columns: df_upload[col] = df_upload[col].astype(str)
+                    if col in df_upload.columns: 
+                        # 🚨 【錯誤修復區】：強制轉字串，並用 regex 清除 Pandas 讀取數字產生的 .0 小數點尾巴，確保舊檔能完美配對！
+                        df_upload[col] = df_upload[col].astype(str).str.replace(r'\.0$', '', regex=True).replace(['nan', 'None', 'NaN'], '').str.strip()
                 st.session_state.res_data = df_upload
                 st.session_state.last_uploaded_id = uploaded_file.file_id
                 st.rerun() 
