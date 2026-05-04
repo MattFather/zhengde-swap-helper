@@ -283,15 +283,10 @@ def add_official_form(doc, sch_year, my_name, leave_type, form_rows):
                         t_m, t_d, t_w = "  ", "  ", "  "
                     t_p = row_data['t_period']
                     t_teacher = row_data['t_teacher']
-                    
-                    # 🌟 處理連鎖調課的 o_teacher 標示
+
+                    # 🌟 無論單純互調還是多角調，一律印出原本老師的姓名，清清楚楚交代軌跡
                     o_teacher = str(row_data.get('o_teacher', my_name)).strip()
-                    my_name_safe = str(my_name).strip()
-                    
-                    if o_teacher != my_name_safe:
-                        cell_desc.text = f"☑ 1. {o_teacher}老師與  {t_m} 月  {t_d} 日星期  {t_w}  第 {t_p} 節   {t_teacher}   教師調課\n☐ 2. 請 __________________________________教師代課"
-                    else:
-                        cell_desc.text = f"☑ 1. 與  {t_m} 月  {t_d} 日星期  {t_w}  第 {t_p} 節   {t_teacher}   教師調課\n☐ 2. 請 __________________________________教師代課"
+                    cell_desc.text = f"☑ 1. {o_teacher}老師與  {t_m} 月  {t_d} 日星期  {t_w}  第 {t_p} 節   {t_teacher}   教師調課\n☐ 2. 請 __________________________________教師代課"
                 else:
                     t_teacher = row_data['t_teacher']
                     cell_desc.text = f"☐ 1. 與 ___ 月 ___ 日星期 ___ 第 ___ 節 ____________ 教師調課\n☑ 2. 請           {t_teacher}           教師代課"
@@ -310,7 +305,7 @@ def add_official_form(doc, sch_year, my_name, leave_type, form_rows):
                     p.paragraph_format.space_after = Pt(2)
                     p.paragraph_format.space_before = Pt(2)
                     for run in p.runs:
-                        run.font.size = Pt(10.0) # 確保文字精確容納
+                        run.font.size = Pt(10.0)
 
         if idx == 0:
             sep = doc.add_paragraph("-" * 90)
@@ -564,14 +559,28 @@ def create_docx(sch_year, sch_term, issue_unit, leave_type, edited_df, my_name):
     for pid in df_swaps["配對編號"].unique():
         if not pid or pid == "": continue
         
-        # 🌟 修改邏輯：完整記錄該次配對所有軌跡，不遺漏任何換課紀錄
         rows = df_swaps[df_swaps["配對編號"] == pid]
         n = len(rows)
-        if n >= 2:
+        
+        # 🌟 核心邏輯升級：2人互調印一筆，多人連鎖印出完整關係
+        if n == 2:
+            row_o = rows.iloc[0]
+            row_t = rows.iloc[1]
+            form_rows.append({
+                "class": row_o['班級'],
+                "subject": row_o['科目'],
+                "o_date": pd.to_datetime(row_o['日期']),
+                "o_period": "".join(filter(str.isdigit, str(row_o['節次']))),
+                "type": "調課",
+                "t_date": pd.to_datetime(row_t['日期']),
+                "t_period": "".join(filter(str.isdigit, str(row_t['節次']))),
+                "t_teacher": row_t['老師'],
+                "o_teacher": row_o['老師']
+            })
+        elif n >= 3:
             for i in range(n):
                 row_o = rows.iloc[i]
                 row_t = rows.iloc[(i + 1) % n]
-                
                 form_rows.append({
                     "class": row_o['班級'],
                     "subject": row_o['科目'],
@@ -993,10 +1002,10 @@ with tab_swap:
                     sorted_chains = sorted(
                         opt['chains'],
                         key=lambda c: (
-                            0 if c['type'] == 'chain' else 1,  # 1. 跨班連鎖優先
-                            c['Teacher_C'],                    # 2. 依老師姓名
-                            day_en.index(c['Day_C']),          # 3. 依星期
-                            c['Period_C']                      # 4. 依節數
+                            0 if c['type'] == 'chain' else 1,  
+                            c['Teacher_C'],                    
+                            day_en.index(c['Day_C']),          
+                            c['Period_C']                      
                         )
                     )
                     
