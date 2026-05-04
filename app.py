@@ -171,7 +171,6 @@ def set_chinese_font(doc, font_name='標楷體'):
 
 # ----------------- 專屬教務處的直式公版表單 -----------------
 def add_official_form(doc, sch_year, my_name, form_rows):
-    # 設定第一節為直式 (A4 Portrait)，縮小邊距確保放得下兩聯
     section = doc.sections[0]
     section.orient = WD_ORIENT.PORTRAIT
     section.page_width = Cm(21.0)
@@ -183,7 +182,6 @@ def add_official_form(doc, sch_year, my_name, form_rows):
 
     copies = [("第一聯", "請假人保存"), ("第二聯", "教學組保存")]
 
-    # --- 計算請假區間 (自動帶入) ---
     valid_dates = [r['o_date'] for r in form_rows if pd.notnull(r['o_date'])]
     if valid_dates:
         min_date = min(valid_dates)
@@ -191,13 +189,10 @@ def add_official_form(doc, sch_year, my_name, form_rows):
         date_str = f"{min_date.month}  月  {min_date.day}  日至  {max_date.month}  月  {max_date.day}  日"
     else:
         date_str = "    月    日至    月    日"
-    # -------------------
 
-    # 【防呆機制】：確保 my_name 有值
     display_name = my_name if my_name and str(my_name).strip() != "None" else "_____________"
 
     for idx, (copy_num, copy_desc) in enumerate(copies):
-        # 標題行
         p_title = doc.add_paragraph()
         p_title.paragraph_format.space_before = Pt(0)
         p_title.paragraph_format.space_after = Pt(0)
@@ -210,7 +205,6 @@ def add_official_form(doc, sch_year, my_name, form_rows):
         run_t1.font.size = Pt(14)
         p_title.add_run(f"\n\t{copy_desc}")
 
-        # 副標題行 (教師姓名與自動請假日期)
         p_sub = doc.add_paragraph()
         p_sub.paragraph_format.space_before = Pt(0)
         p_sub.paragraph_format.space_after = Pt(6)  
@@ -221,12 +215,10 @@ def add_official_form(doc, sch_year, my_name, form_rows):
         run_s3 = p_sub.add_run(f"      假    日期：自  {date_str}")
         for r in [run_s1, run_s2, run_s3]: r.font.size = Pt(12)
 
-        # 建立表格
         table = doc.add_table(rows=7, cols=4)
         table.style = 'Table Grid'
         table.autofit = False
 
-        # 【版面精準控制】：精準分配四個欄位的寬度 (總合 18.0 Cm)
         widths = [Cm(1.5), Cm(1.5), Cm(4.0), Cm(11.0)]
         for j, w in enumerate(widths):
             table.columns[j].width = w
@@ -242,11 +234,9 @@ def add_official_form(doc, sch_year, my_name, form_rows):
             cell.paragraphs[0].paragraph_format.space_before = Pt(2)
             cell.paragraphs[0].paragraph_format.space_after = Pt(2)
 
-        # 固定標題列高度
         table.rows[0].height = Cm(0.8)
         table.rows[0].height_rule = WD_ROW_HEIGHT_RULE.EXACTLY
 
-        # 填入 6 行資料
         for r_idx in range(6):
             r = r_idx + 1
             table.rows[r].height = Cm(1.3)
@@ -287,11 +277,9 @@ def add_official_form(doc, sch_year, my_name, form_rows):
                     t_teacher = row_data['t_teacher']
                     cell_desc.text = f"☐ 1. 與 ___ 月 ___ 日星期 ___ 第 ___ 節 ____________ 教師調課\n☑ 2. 請           {t_teacher}           教師代課"
             else:
-                # 預設空白行
                 cell_time.text = "___月___日\n星期___ 第___節"
                 cell_desc.text = "1. 與 ___ 月 ___ 日星期 ___ 第 ___ 節 ____________ 教師調課\n2. 請 _________________________________教師代課"
 
-            # 調整文字置中與大小微調
             for c_idx in range(4):
                 cell = table.cell(r, c_idx)
                 cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
@@ -305,7 +293,6 @@ def add_official_form(doc, sch_year, my_name, form_rows):
                     for run in p.runs:
                         run.font.size = Pt(10.5)
 
-        # 兩聯中間的裁切線
         if idx == 0:
             sep = doc.add_paragraph("-" * 90)
             sep.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -551,18 +538,15 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df, my_name):
     # ================= 步驟一：產生直式的教務處公版表單 =================
     form_rows = []
     
-    # 強制將 "調/代課" 轉成字串並去除空白，確保判斷正確
     df_raw["調/代課"] = df_raw["調/代課"].fillna("").astype(str).str.strip()
     df_raw["配對編號"] = df_raw["配對編號"].fillna("").astype(str).str.strip()
     df_raw["老師"] = df_raw["老師"].fillna("").astype(str).str.strip()
     
-    # 抓取調課資料 (只抓與操作者 my_name 相關的變動)
     df_swaps = df_raw[df_raw["調/代課"] == "調課"]
     for pid in df_swaps["配對編號"].unique():
         if not pid: continue
         rows = df_swaps[df_swaps["配對編號"] == pid]
         
-        # 使用安全的比對方式
         my_name_safe = str(my_name).strip()
         me_rows = rows[rows["老師"] == my_name_safe]
         other_rows = rows[rows["老師"] != my_name_safe]
@@ -581,7 +565,6 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df, my_name):
                 "t_teacher": row_other['老師']
             })
             
-    # 抓取代課資料
     df_subs = df_raw[df_raw["調/代課"] == "代課"]
     for _, row in df_subs.iterrows():
         form_rows.append({
@@ -595,7 +578,6 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df, my_name):
             "t_teacher": row['老師']
         })
 
-    # 繪製直式 A4 公版
     add_official_form(doc, sch_year, my_name, form_rows[:6])
 
     # ================= 步驟二：產生橫式的教師/班級通知單 =================
@@ -688,7 +670,11 @@ def style_my_grid(val):
 def style_target_grid(val):
     val_str = str(val)
     if '\u200b' in val_str: 
-        return "color: #ffffff; font-weight: bold; background-color: #d9534f;" 
+        return "color: #ffffff; font-weight: bold; background-color: #d9534f;" # 調課紅底
+    elif '\u200c' in val_str:
+        return "color: #ffffff; font-weight: bold; background-color: #28a745;" # 代課綠底
+    elif ⚠️衝堂" in val_str:
+        return "color: #000000; font-weight: bold; background-color: #ffc107;" # 衝堂黃底
     elif "班" in val_str:
         return "color: #2c3e50; font-weight: bold; background-color: #e2e8f0;" 
     return ""
@@ -772,15 +758,9 @@ if my_name and my_name != st.session_state.last_user_name:
         st.session_state[k] = None
     st.session_state.last_user_name = my_name
 
-    # ==============================================================
-    # 🌟 Google Sheets 發送資料魔法 
-    # ==============================================================
     API_URL = f"https://script.google.com/macros/s/AKfycbzlk8-pGvH1S83NWfQ3ThHaLNYjTksmu81-liK0MvouHhh_FV0ZpiotOMZAgKSPNk50rw/exec?name={my_name}"
-    
-    try:
-        requests.get(API_URL, timeout=5)
-    except Exception:
-        pass 
+    try: requests.get(API_URL, timeout=5)
+    except Exception: pass 
 
 st.markdown("---")
 
@@ -798,19 +778,21 @@ with tab_swap:
         with col_c1:
             st.markdown(f"<div class='sub-title'>📅 【{my_name}老師】的課表</div>", unsafe_allow_html=True)
             
-            advanced_mode = st.session_state.get("advanced_toggle", False)
+            st.markdown("<br>", unsafe_allow_html=True)
+            col_t1, col_t2 = st.columns(2)
+            with col_t1: advanced_mode = st.toggle("🚀 解鎖進階多角調", key="advanced_toggle")
+            with col_t2: substitute_mode = st.toggle("🆘 尋找代課老師", key="substitute_toggle")
             
-            # 使用卡片整合控制區
             with st.container(border=True):
-                if advanced_mode:
+                if substitute_mode:
+                    st.markdown("🎯 **操作步驟：** 1️⃣ 點擊您欲請假的班級。 2️⃣ 在右側選擇指定的代課老師。", unsafe_allow_html=True)
+                elif advanced_mode:
                     st.markdown("""
-                        🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟</b></span> 或 <span style="color: #e67e22;"><b>🔗老師名字</b></span> 選擇對象。<br><br>
+                        🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟</b></span> 或 <span style="color: #e67e22;"><b>🔗老師名字</b></span> 選擇對象。<br>
                         <span style="color: #0066cc;"><b>🌟互</b></span>：兩人互調 &emsp; | &emsp; <span style="color: #e67e22;"><b>🔗多</b></span>：跨班連鎖或三角調
                     """, unsafe_allow_html=True)
                 else:
-                    st.markdown("""
-                        🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟 老師名字</b></span> 進行互調。<br>
-                    """, unsafe_allow_html=True)
+                    st.markdown("🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟 老師名字</b></span> 進行互調。", unsafe_allow_html=True)
 
             uni_my_grid = create_schedule_grid(df, my_name)
             uni_display_grid = uni_my_grid.copy()
@@ -825,10 +807,8 @@ with tab_swap:
                     r = opt['Period_B'] - 1
                     c = day_en.index(opt['Day_B'])
                     if opt['direct']:
-                        if advanced_mode:
-                            uni_display_grid.iloc[r, c] = f"🌟互\n{opt['Teacher_B']}"
-                        else:
-                            uni_display_grid.iloc[r, c] = f"🌟 {opt['Teacher_B']}"
+                        if advanced_mode: uni_display_grid.iloc[r, c] = f"🌟互\n{opt['Teacher_B']}"
+                        else: uni_display_grid.iloc[r, c] = f"🌟 {opt['Teacher_B']}"
                     elif advanced_mode: 
                         uni_display_grid.iloc[r, c] = f"🔗多\n{opt['Teacher_B']}"
             
@@ -836,9 +816,6 @@ with tab_swap:
             except AttributeError: styled_uni_grid = uni_display_grid.style.applymap(style_my_grid)
 
             event_uni = st.dataframe(styled_uni_grid, use_container_width=True, height=320, on_select="rerun", selection_mode="single-cell", key="uni_schedule_grid")
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            st.toggle("🚀 一鍵解鎖進階多角調 (連鎖/三角)", key="advanced_toggle")
 
             selection_uni = event_uni.selection.cells
             if selection_uni:
@@ -875,7 +852,65 @@ with tab_swap:
             else: st.session_state.uni_last_clicked_cell = None
 
         with col_c2:
-            if st.session_state.uni_target_tb and st.session_state.uni_target_tb in all_swaps:
+            # === 代課邏輯 ===
+            if substitute_mode and st.session_state.uni_source_class:
+                st.markdown(f"<div class='sub-title'>🆘 安排代課老師</div>", unsafe_allow_html=True)
+                all_other_teachers = [t for t in all_teachers if t != my_name]
+                sub_teacher = st.selectbox("🧑‍🏫 請選擇要請哪位老師代課？", all_other_teachers, index=None, placeholder="下拉尋找或直接輸入...")
+                
+                if sub_teacher:
+                    st.markdown(f"<div class='sub-title'>👀 {sub_teacher}老師的課表變化</div>", unsafe_allow_html=True)
+                    grid_sub = create_schedule_grid(df, sub_teacher)
+                    r_s = st.session_state.uni_source_period - 1
+                    c_s = day_en.index(st.session_state.uni_source_day_en)
+                    
+                    existing_class = grid_sub.iloc[r_s, c_s]
+                    if existing_class != "":
+                        st.warning(f"⚠️ 注意：{sub_teacher}老師在這個時段已經有課，可能會分身乏術喔！")
+                        grid_sub.iloc[r_s, c_s] = f"⚠️衝堂\n{existing_class}"
+                    else:
+                        grid_sub.iloc[r_s, c_s] = f"{st.session_state.uni_source_class}班\n{st.session_state.uni_source_subject}\n[代課]\u200c"
+                        
+                    try: st.dataframe(grid_sub.style.map(style_target_grid), use_container_width=True, height=320)
+                    except AttributeError: st.dataframe(grid_sub.style.applymap(style_target_grid), use_container_width=True, height=320)
+                    
+                    with st.container(border=True):
+                        st.markdown("<div style='font-size: 18px; font-weight: bold; margin-bottom: 10px;'>📥 確認無誤，加入列印清單</div>", unsafe_allow_html=True)
+                        col_d1, col_btn = st.columns([2, 1.5])
+                        with col_d1: 
+                            date_mine = st.date_input(f"這節課的日期 ({st.session_state.uni_source_day_zh})", value=get_next_weekday(st.session_state.uni_source_day_zh), key="uni_d1_sub")
+                        
+                        with col_btn:
+                            st.markdown("<br>", unsafe_allow_html=True)
+                            if st.button("➕ 一鍵加入", type="primary", use_container_width=True, key="uni_btn_sub"):
+                                p_m_str = f"第 {st.session_state.uni_source_period} 節"
+                                conflict = False
+                                
+                                if check_source_conflict(st.session_state.res_data, my_name, date_mine, p_m_str):
+                                    st.error(f"⚠️ 衝堂警告：您 在 {date_mine} {p_m_str} 已有安排！")
+                                    conflict = True
+                                elif check_source_conflict(st.session_state.res_data, sub_teacher, date_mine, p_m_str) or \
+                                     check_destination_conflict(st.session_state.res_data, sub_teacher, date_mine, p_m_str):
+                                    st.error(f"⚠️ 衝堂警告：{sub_teacher}老師 在 {date_mine} {p_m_str} 已有安排代/調課了！")
+                                    conflict = True
+                                    
+                                if not conflict:
+                                    new_row = pd.DataFrame([{
+                                        "勾選列印資料": True, 
+                                        "配對編號": "", 
+                                        "班級": st.session_state.uni_source_class, 
+                                        "日期": pd.to_datetime(date_mine), 
+                                        "節次": p_m_str, 
+                                        "科目": str(st.session_state.uni_source_subject).strip(), 
+                                        "老師": sub_teacher, 
+                                        "調/代課": "代課"
+                                    }])
+                                    st.session_state.res_data = pd.concat([st.session_state.res_data, new_row], ignore_index=True)
+                                    st.success("✅ 代課方案已加入！")
+                                    render_jump_button()
+
+            # === 調課邏輯 (原本的) ===                        
+            elif st.session_state.uni_target_tb and st.session_state.uni_target_tb in all_swaps:
                 opt = all_swaps[st.session_state.uni_target_tb]
                 
                 if opt['direct']:
