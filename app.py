@@ -208,8 +208,11 @@ def add_official_form(doc, sch_year, my_name, form_rows):
         # 建立表格
         table = doc.add_table(rows=7, cols=4)
         table.style = 'Table Grid'
+        # 強制關閉自動調整，確保寬度設定生效
+        table.autofit = False
 
-        widths = [Cm(1.5), Cm(1.5), Cm(3.5), Cm(11.5)]
+        # 【版面微調】：重新分配四個欄位的寬度 (總合 18.0 Cm)
+        widths = [Cm(1.2), Cm(1.2), Cm(3.0), Cm(12.6)]
         for row in table.rows:
             for c_idx, w in enumerate(widths):
                 row.cells[c_idx].width = w
@@ -737,7 +740,7 @@ if my_name and my_name != st.session_state.last_user_name:
     st.session_state.last_user_name = my_name
 
     # ==============================================================
-    # 🌟 Google Sheets 發送資料魔法 
+    # 🌟 Google Sheets 發送資料魔法
     # ==============================================================
     API_URL = f"https://script.google.com/macros/s/AKfycbzlk8-pGvH1S83NWfQ3ThHaLNYjTksmu81-liK0MvouHhh_FV0ZpiotOMZAgKSPNk50rw/exec?name={my_name}"
     
