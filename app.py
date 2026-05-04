@@ -1080,7 +1080,7 @@ with tab_print:
         with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
         
         leave_options = ["", "事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
-        with c3: leave_type = st.selectbox("假別 (教務處存查聯用)", leave_options, index=0)
+        with c3: leave_type = st.selectbox("假別", leave_options, index=0)
         
         with c4: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
 
