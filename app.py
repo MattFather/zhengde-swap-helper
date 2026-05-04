@@ -692,6 +692,7 @@ def style_target_grid(val):
 day_en = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
 day_zh = ['星期一', '星期二', '星期三', '星期四', '星期五']
 day_map_rev = dict(zip(day_zh, day_en))
+day_map_en_zh = dict(zip(day_en, day_zh))
 
 def render_jump_button():
     jump_html = """
@@ -979,10 +980,13 @@ with tab_swap:
                             
                 elif advanced_mode:
                     st.markdown("<div class='sub-title' style='font-size: 22px !important;'>💡 請選擇協助的［橋樑］老師</div>", unsafe_allow_html=True)
+                    
+                    # 🌟 將日期的轉換資訊帶入選單的標籤中
                     bridge_options = {}
                     for c in opt['chains']:
                         t_type = "跨班連鎖" if c['type'] == 'chain' else "三角調"
-                        label = f"[{t_type}] {c['Teacher_C']}老師"
+                        d_zh = day_map_en_zh.get(c['Day_C'], "")
+                        label = f"[{t_type}] {c['Teacher_C']}老師 ({d_zh}第{c['Period_C']}節)"
                         bridge_options[label] = c
                         
                     selected_bridge = st.selectbox("橋樑老師選項", list(bridge_options.keys()), label_visibility="collapsed")
@@ -1074,13 +1078,12 @@ with tab_swap:
 with tab_print:
     with st.container(border=True):
         st.markdown("<div class='sub-title'>⚙️ 單據表頭設定</div>", unsafe_allow_html=True)
-        # 🌟 換位置：假別與發放單位互換
         c1, c2, c3, c4 = st.columns([1, 1, 1.5, 1])
         with c1: sch_year = st.text_input("學年度", value="114")
         with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
         
         leave_options = ["", "事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
-        with c3: leave_type = st.selectbox("假別", leave_options, index=0)
+        with c3: leave_type = st.selectbox("假別 (教務處存查聯用)", leave_options, index=0)
         
         with c4: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
 
