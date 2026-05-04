@@ -117,13 +117,18 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
 
 def create_schedule_grid(df, teacher_name):
     t_df = df[df['Teacher'] == teacher_name].copy()
-    if t_df.empty: return pd.DataFrame()
-    t_df = t_df.drop_duplicates(subset=['Period', 'Day'])
-    t_df['Cell'] = t_df['Class'].astype(str) + "班\n" + t_df['Subject']
-    grid = t_df.pivot(index='Period', columns='Day', values='Cell')
     all_days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-    all_periods = list(range(1, 8)) 
-    grid = grid.reindex(index=all_periods, columns=all_days).fillna("")
+    all_periods = list(range(1, 9)) # 保證產生第1到第8節
+    
+    # 🌟 處理沒有課的老師：自動回傳空白表單
+    if t_df.empty:
+        grid = pd.DataFrame("", index=all_periods, columns=all_days)
+    else:
+        t_df = t_df.drop_duplicates(subset=['Period', 'Day'])
+        t_df['Cell'] = t_df['Class'].astype(str) + "班\n" + t_df['Subject']
+        grid = t_df.pivot(index='Period', columns='Day', values='Cell')
+        grid = grid.reindex(index=all_periods, columns=all_days).fillna("")
+        
     grid.index = [f"第 {i} 節" for i in all_periods]
     grid.columns = ['星期一', '星期二', '星期三', '星期四', '星期五']
     return grid
@@ -175,8 +180,8 @@ def add_official_form(doc, sch_year, my_name, form_rows):
     section.orient = WD_ORIENT.PORTRAIT
     section.page_width = Cm(21.0)
     section.page_height = Cm(29.7)
-    section.left_margin = Cm(1.0)  # 縮減邊距以容納更寬的表格
-    section.right_margin = Cm(1.0) # 縮減邊距以容納更寬的表格
+    section.left_margin = Cm(1.0)
+    section.right_margin = Cm(1.0)
     section.top_margin = Cm(1.2)
     section.bottom_margin = Cm(1.2)
 
@@ -219,7 +224,6 @@ def add_official_form(doc, sch_year, my_name, form_rows):
         table.style = 'Table Grid'
         table.autofit = False
 
-        # 【版面精準控制】：總寬度擴展至 19.0 Cm，異動情形增至 12.2 Cm
         widths = [Cm(1.5), Cm(1.5), Cm(3.8), Cm(12.2)]
         for j, w in enumerate(widths):
             table.columns[j].width = w
@@ -536,10 +540,8 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df, my_name):
     df_raw = edited_df[edited_df["勾選列印資料"] == True].copy()
     if df_raw.empty: return None
 
-    # ================= 步驟一：產生直式的教務處公版表單 =================
     form_rows = []
     
-    # 【清洗資料防呆】：防止匯入的舊 CSV 含有 .0 或 NaN 導致匹配失敗
     df_raw["調/代課"] = df_raw["調/代課"].astype(str).replace(['nan', 'None', 'NaN'], '').str.strip()
     df_raw["配對編號"] = df_raw["配對編號"].astype(str).str.replace(r'\.0$', '', regex=True).replace(['nan', 'None', 'NaN'], '').str.strip()
     df_raw["老師"] = df_raw["老師"].astype(str).replace(['nan', 'None', 'NaN'], '').str.strip()
@@ -582,7 +584,6 @@ def create_docx(sch_year, sch_term, issue_unit, edited_df, my_name):
 
     add_official_form(doc, sch_year, my_name, form_rows[:6])
 
-    # ================= 步驟二：產生橫式的教師/班級通知單 =================
     new_section = doc.add_section()
     new_section.orient = WD_ORIENT.LANDSCAPE
     new_section.page_width = Cm(29.7)
@@ -753,7 +754,13 @@ st.markdown("<div class='main-title'>🏫 正德調課小幫手</div>", unsafe_a
 col_top1, col_top2, col_top3 = st.columns([1, 2, 1])
 with col_top2:
     all_teachers = sorted(df['Teacher'].dropna().unique())
-    my_name = st.selectbox("🙋‍♂️ 請選擇您的名字：", all_teachers, index=None, placeholder="請選擇...")
+    col_name1, col_name2 = st.columns(2)
+    with col_name1:
+        sel_name = st.selectbox("🙋‍♂️ 下拉選擇您的名字：", all_teachers, index=None, placeholder="請選擇...")
+    with col_name2:
+        txt_name = st.text_input("✏️ 或自行輸入姓名：", placeholder="若名單無名字請輸入")
+    
+    my_name = txt_name.strip() if txt_name.strip() else sel_name
 
 if my_name and my_name != st.session_state.last_user_name:
     for k in state_keys: 
@@ -780,22 +787,9 @@ with tab_swap:
         with col_c1:
             st.markdown(f"<div class='sub-title'>📅 【{my_name}老師】的課表</div>", unsafe_allow_html=True)
             
-            st.markdown("<br>", unsafe_allow_html=True)
-            col_t1, col_t2 = st.columns(2)
-            with col_t1: advanced_mode = st.toggle("🚀 解鎖進階多角調", key="advanced_toggle")
-            with col_t2: substitute_mode = st.toggle("🆘 尋找代課老師", key="substitute_toggle")
+            advanced_mode = st.session_state.get("advanced_toggle", False)
+            substitute_mode = st.session_state.get("substitute_toggle", False)
             
-            with st.container(border=True):
-                if substitute_mode:
-                    st.markdown("🎯 **操作步驟：** 1️⃣ 點擊您欲請假的班級。 2️⃣ 在右側選擇指定的代課老師。", unsafe_allow_html=True)
-                elif advanced_mode:
-                    st.markdown("""
-                        🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style='color: #0066cc;'><b>🌟</b></span> 或 <span style='color: #e67e22;'><b>🔗老師名字</b></span> 選擇對象。<br>
-                        <span style='color: #0066cc;'><b>🌟互</b></span>：兩人互調 &emsp; | &emsp; <span style='color: #e67e22;'><b>🔗多</b></span>：跨班連鎖或三角調
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown("🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style='color: #0066cc;'><b>🌟 老師名字</b></span> 進行互調。", unsafe_allow_html=True)
-
             uni_my_grid = create_schedule_grid(df, my_name)
             uni_display_grid = uni_my_grid.copy()
             
@@ -817,7 +811,24 @@ with tab_swap:
             try: styled_uni_grid = uni_display_grid.style.map(style_my_grid)
             except AttributeError: styled_uni_grid = uni_display_grid.style.applymap(style_my_grid)
 
-            event_uni = st.dataframe(styled_uni_grid, use_container_width=True, height=320, on_select="rerun", selection_mode="single-cell", key="uni_schedule_grid")
+            event_uni = st.dataframe(styled_uni_grid, use_container_width=True, height=380, on_select="rerun", selection_mode="single-cell", key="uni_schedule_grid")
+
+            # 🌟 功能開關移至課表下方
+            st.markdown("<br>", unsafe_allow_html=True)
+            col_t1, col_t2 = st.columns(2)
+            with col_t1: st.toggle("🚀 解鎖進階多角調", key="advanced_toggle")
+            with col_t2: st.toggle("🆘 尋找代課老師", key="substitute_toggle")
+            
+            with st.container(border=True):
+                if substitute_mode:
+                    st.markdown("🎯 **操作步驟：** 1️⃣ 點擊您欲請假的班級。 2️⃣ 在右側選擇指定的代課老師。", unsafe_allow_html=True)
+                elif advanced_mode:
+                    st.markdown("""
+                        🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style='color: #0066cc;'><b>🌟</b></span> 或 <span style='color: #e67e22;'><b>🔗老師名字</b></span> 選擇對象。<br>
+                        <span style='color: #0066cc;'><b>🌟互</b></span>：兩人互調 &emsp; | &emsp; <span style='color: #e67e22;'><b>🔗多</b></span>：跨班連鎖或三角調
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown("🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style='color: #0066cc;'><b>🌟 老師名字</b></span> 進行互調。", unsafe_allow_html=True)
 
             selection_uni = event_uni.selection.cells
             if selection_uni:
@@ -858,7 +869,14 @@ with tab_swap:
             if substitute_mode and st.session_state.uni_source_class:
                 st.markdown(f"<div class='sub-title'>🆘 安排代課老師</div>", unsafe_allow_html=True)
                 all_other_teachers = [t for t in all_teachers if t != my_name]
-                sub_teacher = st.selectbox("🧑‍🏫 請選擇要請哪位老師代課？", all_other_teachers, index=None, placeholder="下拉尋找或直接輸入...")
+                
+                col_sub1, col_sub2 = st.columns(2)
+                with col_sub1:
+                    sub_sel = st.selectbox("🧑‍🏫 下拉選擇代課老師：", all_other_teachers, index=None, placeholder="下拉尋找...")
+                with col_sub2:
+                    sub_txt = st.text_input("✏️ 或自行輸入姓名：", placeholder="例如：外聘代課")
+                
+                sub_teacher = sub_txt.strip() if sub_txt.strip() else sub_sel
                 
                 if sub_teacher:
                     st.markdown(f"<div class='sub-title'>👀 {sub_teacher}老師的課表變化</div>", unsafe_allow_html=True)
@@ -873,8 +891,8 @@ with tab_swap:
                     else:
                         grid_sub.iloc[r_s, c_s] = f"{st.session_state.uni_source_class}班\n{st.session_state.uni_source_subject}\n[代課]\u200c"
                         
-                    try: st.dataframe(grid_sub.style.map(style_target_grid), use_container_width=True, height=320)
-                    except AttributeError: st.dataframe(grid_sub.style.applymap(style_target_grid), use_container_width=True, height=320)
+                    try: st.dataframe(grid_sub.style.map(style_target_grid), use_container_width=True, height=380)
+                    except AttributeError: st.dataframe(grid_sub.style.applymap(style_target_grid), use_container_width=True, height=380)
                     
                     with st.container(border=True):
                         st.markdown("<div style='font-size: 18px; font-weight: bold; margin-bottom: 10px;'>📥 確認無誤，加入列印清單</div>", unsafe_allow_html=True)
@@ -921,8 +939,8 @@ with tab_swap:
                     grid_b.iloc[opt['Period_B'] - 1, day_en.index(opt['Day_B'])] = "" 
                     grid_b.iloc[st.session_state.uni_source_period - 1, day_en.index(st.session_state.uni_source_day_en)] = f"{st.session_state.uni_source_class}班\n{opt['Subject_X']}\u200b"
                     
-                    try: st.dataframe(grid_b.style.map(style_target_grid), use_container_width=True, height=320)
-                    except AttributeError: st.dataframe(grid_b.style.applymap(style_target_grid), use_container_width=True, height=320)
+                    try: st.dataframe(grid_b.style.map(style_target_grid), use_container_width=True, height=380)
+                    except AttributeError: st.dataframe(grid_b.style.applymap(style_target_grid), use_container_width=True, height=380)
                     
                     with st.container(border=True):
                         st.markdown("<div style='font-size: 18px; font-weight: bold; margin-bottom: 10px;'>📥 確認無誤，加入列印清單</div>", unsafe_allow_html=True)
@@ -985,12 +1003,12 @@ with tab_swap:
                         grid_c.iloc[st.session_state.uni_source_period - 1, day_en.index(st.session_state.uni_source_day_en)] = f"{st.session_state.uni_source_class}班\n{c_data['Subject_W']}\u200b"
 
                     st.markdown(f"<div class='sub-title'>👀 {opt['Teacher_B']}老師的課表變化</div>", unsafe_allow_html=True)
-                    try: st.dataframe(grid_b.style.map(style_target_grid), use_container_width=True, height=320)
-                    except AttributeError: st.dataframe(grid_b.style.applymap(style_target_grid), use_container_width=True, height=320)
+                    try: st.dataframe(grid_b.style.map(style_target_grid), use_container_width=True, height=380)
+                    except AttributeError: st.dataframe(grid_b.style.applymap(style_target_grid), use_container_width=True, height=380)
 
                     st.markdown(f"<div class='sub-title'>👀 {c_data['Teacher_C']}老師的課表變化</div>", unsafe_allow_html=True)
-                    try: st.dataframe(grid_c.style.map(style_target_grid), use_container_width=True, height=320)
-                    except AttributeError: st.dataframe(grid_c.style.applymap(style_target_grid), use_container_width=True, height=320)
+                    try: st.dataframe(grid_c.style.map(style_target_grid), use_container_width=True, height=380)
+                    except AttributeError: st.dataframe(grid_c.style.applymap(style_target_grid), use_container_width=True, height=380)
 
                     with st.container(border=True):
                         st.markdown("<div style='font-size: 18px; font-weight: bold; margin-bottom: 10px;'>📥 確認無誤，加入列印清單</div>", unsafe_allow_html=True)
@@ -1102,7 +1120,6 @@ with tab_print:
                 if "勾選列印資料" in df_upload.columns: df_upload["勾選列印資料"] = df_upload["勾選列印資料"].astype(str).str.lower() == 'true'
                 for col in ["配對編號", "班級", "節次", "科目", "老師", "調/代課"]:
                     if col in df_upload.columns: 
-                        # 🚨 【錯誤修復區】：強制轉字串，並用 regex 清除 Pandas 讀取數字產生的 .0 小數點尾巴，確保舊檔能完美配對！
                         df_upload[col] = df_upload[col].astype(str).str.replace(r'\.0$', '', regex=True).replace(['nan', 'None', 'NaN'], '').str.strip()
                 st.session_state.res_data = df_upload
                 st.session_state.last_uploaded_id = uploaded_file.file_id
