@@ -753,7 +753,7 @@ st.markdown("<div class='main-title'>🏫 正德調課小幫手</div>", unsafe_a
 col_top1, col_top2, col_top3 = st.columns([1, 2, 1])
 with col_top2:
     all_teachers = sorted(df['Teacher'].dropna().unique())
-    # 🌟 恢復純淨單一的下拉選單
+    # 🌟 恢復最乾淨的單一下拉選單
     my_name = st.selectbox("🙋‍♂️ 請選擇您的名字：", all_teachers, index=None, placeholder="請選擇...")
 
 if my_name and my_name != st.session_state.last_user_name:
@@ -787,7 +787,7 @@ with tab_swap:
             # 🌟 操作步驟完美安插在標題下方
             with st.container(border=True):
                 if substitute_mode:
-                    st.markdown("🎯 **操作步驟：** 1️⃣ 點擊您欲請假的班級。 2️⃣ 在右側直接輸入代課老師姓名。", unsafe_allow_html=True)
+                    st.markdown("🎯 **操作步驟：** 1️⃣ 點擊您欲請假的班級。 2️⃣ 在右側選擇指定的代課老師。", unsafe_allow_html=True)
                 elif advanced_mode:
                     st.markdown("""
                         🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style='color: #0066cc;'><b>🌟</b></span> 或 <span style='color: #e67e22;'><b>🔗老師名字</b></span> 選擇對象。<br>
@@ -819,7 +819,7 @@ with tab_swap:
 
             event_uni = st.dataframe(styled_uni_grid, use_container_width=True, height=380, on_select="rerun", selection_mode="single-cell", key="uni_schedule_grid")
 
-            # 🌟 開關完美安插在課表下方
+            # 🌟 開關移到課表下方
             st.markdown("<br>", unsafe_allow_html=True)
             col_t1, col_t2 = st.columns(2)
             with col_t1: st.toggle("🚀 解鎖進階多角調", key="advanced_toggle")
@@ -863,14 +863,19 @@ with tab_swap:
             # === 代課邏輯 ===
             if substitute_mode and st.session_state.uni_source_class:
                 st.markdown(f"<div class='sub-title'>🆘 安排代課老師</div>", unsafe_allow_html=True)
+                all_other_teachers = [t for t in all_teachers if t != my_name]
                 
-                # 🌟 採用單一智慧文字輸入框，完美解決框架限制
-                sub_teacher_raw = st.text_input("🧑‍🏫 請輸入代課老師姓名（輸入完請按 Enter）：", placeholder="例如：陳乙菱、校外外聘...")
-                sub_teacher = sub_teacher_raw.strip() if sub_teacher_raw else None
+                # 🌟 代課老師選擇：雙欄位設計
+                col_sub1, col_sub2 = st.columns(2)
+                with col_sub1:
+                    sub_sel = st.selectbox("🧑‍🏫 下拉選擇校內老師：", all_other_teachers, index=None, placeholder="下拉尋找或搜尋...")
+                with col_sub2:
+                    sub_txt = st.text_input("✏️ 空白表格：", placeholder="0節課師長或校外老師")
+                
+                sub_teacher = sub_txt.strip() if sub_txt.strip() else sub_sel
                 
                 if sub_teacher:
-                    st.markdown(f"<div class='sub-title'>👀 {sub_teacher}老師的課表</div>", unsafe_allow_html=True)
-                    # 無論有課沒課，自動產生 8 節空白或既有課表
+                    st.markdown(f"<div class='sub-title'>👀 {sub_teacher}老師的課表變化</div>", unsafe_allow_html=True)
                     grid_sub = create_schedule_grid(df, sub_teacher)
                     r_s = st.session_state.uni_source_period - 1
                     c_s = day_en.index(st.session_state.uni_source_day_en)
@@ -920,7 +925,7 @@ with tab_swap:
                                     st.success("✅ 代課方案已加入！")
                                     render_jump_button()
 
-            # === 調課邏輯 (原本的) ===                        
+            # === 調課邏輯 ===                        
             elif st.session_state.uni_target_tb and st.session_state.uni_target_tb in all_swaps:
                 opt = all_swaps[st.session_state.uni_target_tb]
                 
@@ -1075,17 +1080,13 @@ with tab_print:
 
     st.markdown("<div class='sub-title' style='margin-top: 20px;'>📝 待列印清單編輯區</div>", unsafe_allow_html=True)
     
-    if not st.session_state.res_data.empty:
-        st.session_state.res_data["日期"] = pd.to_datetime(st.session_state.res_data["日期"], errors='coerce')
-        st.session_state.res_data["勾選列印資料"] = st.session_state.res_data["勾選列印資料"].astype(bool)
-        for col in ["配對編號", "班級", "節次", "科目", "老師", "調/代課"]:
-            st.session_state.res_data[col] = st.session_state.res_data[col].fillna("").astype(str)
-            st.session_state.res_data.loc[st.session_state.res_data[col] == "nan", col] = ""
-    else:
+    if 'res_data' not in st.session_state:
         st.session_state.res_data = pd.DataFrame({"勾選列印資料": pd.Series(dtype='bool'), "配對編號": pd.Series(dtype='str'), "班級": pd.Series(dtype='str'), "日期": pd.Series(dtype='datetime64[ns]'), "節次": pd.Series(dtype='str'), "科目": pd.Series(dtype='str'), "老師": pd.Series(dtype='str'), "調/代課": pd.Series(dtype='str')})
 
+    # 🌟 加上 key 並移除不斷 mutate dataframe 的地雷，解決資料被洗掉的 Bug
     edited_df = st.data_editor(
         st.session_state.res_data,
+        key="res_data_editor",
         column_config={
             "勾選列印資料": st.column_config.CheckboxColumn("勾選"), "配對編號": st.column_config.TextColumn("配對編號"),
             "班級": st.column_config.TextColumn("班級"), "日期": st.column_config.DateColumn("日期", format="MM/DD"),
@@ -1095,7 +1096,9 @@ with tab_print:
         },
         num_rows="dynamic", use_container_width=True, hide_index=True, column_order=("勾選列印資料", "配對編號", "班級", "日期", "節次", "科目", "老師", "調/代課")
     )
-    st.session_state.res_data = edited_df
+    
+    if not edited_df.equals(st.session_state.res_data):
+        st.session_state.res_data = edited_df
 
     c_download, _ = st.columns([2, 8])
     with c_download:
