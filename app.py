@@ -893,7 +893,7 @@ with tab_swap:
                 with col_sub1:
                     sub_sel = st.selectbox("🧑‍🏫 下拉選擇校內老師：", all_other_teachers, index=None, placeholder="下拉尋找或搜尋...")
                 with col_sub2:
-                    sub_txt = st.text_input("✏️ 空白表格：", placeholder="0節課師長或校外老師")
+                    sub_txt = st.text_input("✏️ 手動輸入：", placeholder="無課務師長或校外老師")
                 
                 sub_teacher = sub_txt.strip() if sub_txt.strip() else sub_sel
                 
