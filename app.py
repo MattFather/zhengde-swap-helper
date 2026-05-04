@@ -14,7 +14,7 @@ import tempfile
 import os
 import streamlit.components.v1 as components
 import base64
-import requests # <--- 串接 Google Sheets 的套件
+import requests 
 
 # ================= 1. 頁面基本設定與 JS 快捷鍵 =================
 st.set_page_config(
@@ -169,6 +169,119 @@ def set_chinese_font(doc, font_name='標楷體'):
     doc.styles['Normal'].font.name = font_name
     doc.styles['Normal']._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
 
+# ----------------- 專屬教務處的直式公版表單 -----------------
+def add_official_form(doc, sch_year, my_name, form_rows):
+    # 設定第一節為直式 (A4 Portrait)
+    section = doc.sections[0]
+    section.orient = WD_ORIENT.PORTRAIT
+    section.page_width = Cm(21.0)
+    section.page_height = Cm(29.7)
+    section.left_margin = Cm(1.5)
+    section.right_margin = Cm(1.5)
+    section.top_margin = Cm(1.5)
+    section.bottom_margin = Cm(1.5)
+
+    copies = [("第一聯", "請假人保存"), ("第二聯", "教學組保存")]
+
+    for idx, (copy_num, copy_desc) in enumerate(copies):
+        # 標題行
+        p_title = doc.add_paragraph()
+        p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        tab_stops = p_title.paragraph_format.tab_stops
+        tab_stops.add_tab_stop(Cm(16.5), WD_TAB_ALIGNMENT.RIGHT)
+
+        run_t1 = p_title.add_run(f"新北市立正德國民中學      {sch_year}學年度教師自行調補代課單\t{copy_num}")
+        run_t1.bold = True
+        run_t1.font.size = Pt(14)
+
+        p_title.add_run(f"\n\t{copy_desc}")
+
+        # 副標題行 (教師姓名與日期)
+        p_sub = doc.add_paragraph()
+        p_sub.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        run_s1 = p_sub.add_run("       教師 ")
+        run_s2 = p_sub.add_run(f"{my_name}")
+        run_s2.underline = True
+        run_s3 = p_sub.add_run("      假    日期：自    月    日至    月    日")
+        for r in [run_s1, run_s2, run_s3]: r.font.size = Pt(12)
+
+        # 建立表格
+        table = doc.add_table(rows=7, cols=4)
+        table.style = 'Table Grid'
+
+        widths = [Cm(1.5), Cm(1.5), Cm(3.5), Cm(11.5)]
+        for row in table.rows:
+            for c_idx, w in enumerate(widths):
+                row.cells[c_idx].width = w
+
+        headers = ["班級", "科目", "時      間", "異            動            情            形"]
+        for c_idx, h in enumerate(headers):
+            cell = table.cell(0, c_idx)
+            cell.text = h
+            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
+        # 填入 6 行資料
+        for r_idx in range(6):
+            r = r_idx + 1
+            cell_class = table.cell(r, 0)
+            cell_subj = table.cell(r, 1)
+            cell_time = table.cell(r, 2)
+            cell_desc = table.cell(r, 3)
+
+            table.rows[r].height = Cm(1.4) 
+
+            if r_idx < len(form_rows):
+                row_data = form_rows[r_idx]
+                cell_class.text = str(row_data['class'])
+                cell_subj.text = str(row_data['subject'])
+
+                o_date = row_data['o_date']
+                if pd.notnull(o_date):
+                    o_w_map = {0:"一", 1:"二", 2:"三", 3:"四", 4:"五", 5:"六", 6:"日"}
+                    o_m, o_d = o_date.month, o_date.day
+                    o_w = o_w_map.get(o_date.weekday(), " ")
+                else:
+                    o_m, o_d, o_w = "  ", "  ", "  "
+
+                cell_time.text = f"  {o_m} 月  {o_d} 日\n星期  {o_w}  第 {row_data['o_period']} 節"
+
+                if row_data['type'] == "調課":
+                    t_date = row_data['t_date']
+                    if pd.notnull(t_date):
+                        t_m, t_d = t_date.month, t_date.day
+                        t_w = o_w_map.get(t_date.weekday(), " ")
+                    else:
+                        t_m, t_d, t_w = "  ", "  ", "  "
+                    t_p = row_data['t_period']
+                    t_teacher = row_data['t_teacher']
+
+                    cell_desc.text = f"☑ 1. 與  {t_m} 月  {t_d} 日星期  {t_w}  第 {t_p} 節   {t_teacher}   教師調課\n☐ 2. 請 __________________________________教師代課"
+                else:
+                    t_teacher = row_data['t_teacher']
+                    cell_desc.text = f"☐ 1. 與 ___ 月 ___ 日星期 ___ 第 ___ 節 ____________ 教師調課\n☑ 2. 請           {t_teacher}           教師代課"
+            else:
+                # 預設空白行
+                cell_time.text = "___月___日\n星期___ 第___節"
+                cell_desc.text = "1. 與 ___ 月 ___ 日星期 ___ 第 ___ 節 ____________ 教師調課\n2. 請 _________________________________教師代課"
+
+            for c_idx in range(4):
+                cell = table.cell(r, c_idx)
+                cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+                for p in cell.paragraphs:
+                    if c_idx < 3:
+                        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    else:
+                        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    p.paragraph_format.space_after = Pt(2)
+                    p.paragraph_format.space_before = Pt(2)
+
+        # 兩聯中間的裁切線
+        if idx == 0:
+            sep = doc.add_paragraph("\n------------------------------------------------------------------------------------------------------\n")
+            sep.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+# ----------------- 教師與班級通知聯 (橫式) -----------------
 def generate_timetable_block(container_cell, title_suffix, sch_year, sch_term, issue_unit, class_label, filtered_df, is_teacher_side=True, teacher_name=""):
     p_header = container_cell.paragraphs[0]
     p_header.paragraph_format.space_before = Pt(0)
@@ -397,35 +510,77 @@ def process_swap_logic(df):
     for _, r in no_id.iterrows(): df_result.append(r)
     return pd.DataFrame(df_result)
 
-def create_docx(sch_year, sch_term, issue_unit, edited_df):
+def create_docx(sch_year, sch_term, issue_unit, edited_df, my_name):
     doc = Document()
-    section = doc.sections[0]
-    section.orient = WD_ORIENT.LANDSCAPE
-    section.page_width = Cm(29.7)
-    section.page_height = Cm(21.0)
-    section.left_margin = Cm(0.8)
-    section.right_margin = Cm(0.5)
-    section.top_margin = section.bottom_margin = Cm(0.5)
     set_chinese_font(doc, '標楷體')
 
     df_raw = edited_df[edited_df["勾選列印資料"] == True].copy()
     if df_raw.empty: return None
-    
+
+    # ================= 步驟一：產生直式的教務處公版表單 =================
+    form_rows = []
     df_raw["配對編號"] = df_raw["配對編號"].fillna("").astype(str).str.strip()
-    df_raw["班級"] = df_raw["班級"].fillna("").astype(str).str.strip()
-    df_raw["老師"] = df_raw["老師"].fillna("").astype(str).str.strip()
+    
+    # 抓取調課資料 (只抓與操作者 my_name 相關的變動)
+    df_swaps = df_raw[df_raw["調/代課"] == "調課"]
+    for pid in df_swaps["配對編號"].unique():
+        if not pid: continue
+        rows = df_swaps[df_swaps["配對編號"] == pid]
+        me_rows = rows[rows["老師"] == my_name]
+        other_rows = rows[rows["老師"] != my_name]
+        if not me_rows.empty and not other_rows.empty:
+            row_me = me_rows.iloc[0]
+            row_other = other_rows.iloc[0]
+            form_rows.append({
+                "class": row_me['班級'],
+                "subject": row_me['科目'],
+                "o_date": pd.to_datetime(row_me['日期']),
+                "o_period": "".join(filter(str.isdigit, str(row_me['節次']))),
+                "type": "調課",
+                "t_date": pd.to_datetime(row_other['日期']),
+                "t_period": "".join(filter(str.isdigit, str(row_other['節次']))),
+                "t_teacher": row_other['老師']
+            })
+            
+    # 抓取代課資料
+    df_subs = df_raw[df_raw["調/代課"] == "代課"]
+    for _, row in df_subs.iterrows():
+        form_rows.append({
+            "class": row['班級'],
+            "subject": row['科目'],
+            "o_date": pd.to_datetime(row['日期']),
+            "o_period": "".join(filter(str.isdigit, str(row['節次']))),
+            "type": "代課",
+            "t_date": None,
+            "t_period": "",
+            "t_teacher": row['老師']
+        })
+
+    # 繪製直式 A4 公版
+    add_official_form(doc, sch_year, my_name, form_rows[:6])
+
+    # ================= 步驟二：產生橫式的教師/班級通知單 =================
+    # 新增一個 Section 並設定為橫式
+    new_section = doc.add_section()
+    new_section.orient = WD_ORIENT.LANDSCAPE
+    new_section.page_width = Cm(29.7)
+    new_section.page_height = Cm(21.0)
+    new_section.left_margin = Cm(0.8)
+    new_section.right_margin = Cm(0.5)
+    new_section.top_margin = new_section.bottom_margin = Cm(0.5)
+
     df_processed = process_swap_logic(df_raw)
-
     all_blocks = []
-    classes = sorted(list(set([c for c in df_processed["班級"] if c != ""])))
-    all_blocks.append({"suffix": "存查聯", "label": ", ".join(classes), "df": df_processed, "is_teacher": True, "teacher_name": ""})
 
+    # 產生「教師通知聯」
     teachers = sorted(list(set([t for t in df_processed["老師"] if t != ""])))
     for t in teachers:
         df_t = df_processed[df_processed["老師"] == t]
         t_classes = sorted(list(set([c for c in df_t["班級"] if c != ""])))
         all_blocks.append({"suffix": "教師通知聯", "label": ", ".join(t_classes), "df": df_t, "is_teacher": True, "teacher_name": f"{t}老師"})
 
+    # 產生「班級公告聯」
+    classes = sorted(list(set([c for c in df_processed["班級"] if c != ""])))
     for c in classes:
         df_c = df_processed[df_processed["班級"] == c]
         all_blocks.append({"suffix": "班級公告聯", "label": c, "df": df_c, "is_teacher": False, "teacher_name": ""})
@@ -582,16 +737,14 @@ if my_name and my_name != st.session_state.last_user_name:
     st.session_state.last_user_name = my_name
 
     # ==============================================================
-    # 🌟 Google Sheets 發送資料魔法 (已改為穩定的 GET 方法)
+    # 🌟 Google Sheets 發送資料魔法 
     # ==============================================================
-    # 記得要把名字當作參數接在網址後面
     API_URL = f"https://script.google.com/macros/s/AKfycbzlk8-pGvH1S83NWfQ3ThHaLNYjTksmu81-liK0MvouHhh_FV0ZpiotOMZAgKSPNk50rw/exec?name={my_name}"
     
     try:
-        # 改用 GET 並且把 timeout 放寬到 5 秒
         requests.get(API_URL, timeout=5)
     except Exception:
-        pass # 如果網路卡住就不理它，不影響老師使用
+        pass 
 
 st.markdown("---")
 
@@ -828,7 +981,7 @@ with tab_swap:
 # ----------------- Tab 2: 🖨️ 第二步：列印單據與輸出 -----------------
 with tab_print:
     with st.container(border=True):
-        st.markdown("<div class='sub-title'>⚙️ 通知單標題設定</div>", unsafe_allow_html=True)
+        st.markdown("<div class='sub-title'>⚙️ 單據表頭設定</div>", unsafe_allow_html=True)
         c1, c2, c3 = st.columns(3)
         with c1: sch_year = st.text_input("學年度", value="114")
         with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
@@ -885,7 +1038,8 @@ with tab_print:
     with st.container(border=True):
         if issue_unit.strip() == "ＯＯＯ老師": st.error("⚠️ 提醒：請在上方修改「發放單位」(預設為ＯＯＯ老師) 後，即可解鎖列印與下載功能。")
         else:
-            data_docx = create_docx(sch_year, sch_term, issue_unit, edited_df)
+            # 這裡把 my_name 傳進去給公版表單使用
+            data_docx = create_docx(sch_year, sch_term, issue_unit, edited_df, my_name)
             if data_docx:
                 col_word, col_pdf = st.columns([1, 1])
                 with col_word: st.download_button("📥 下載 Word 檔 (可編輯)", data_docx, f"正德調代課單_{datetime.date.today().strftime('%Y%m%d')}.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
