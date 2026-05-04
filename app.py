@@ -255,7 +255,7 @@ def add_official_form(doc, sch_year, my_name, form_rows):
                 o_date = row_data['o_date']
                 if pd.notnull(o_date):
                     o_w_map = {0:"一", 1:"二", 2:"三", 3:"四", 4:"五", 5:"六", 6:"日"}
-                    o_m, o_date.month, o_date.day
+                    o_m, o_d = o_date.month, o_date.day  # 🚨 這裡已修復之前的隱藏變數地雷
                     o_w = o_w_map.get(o_date.weekday(), " ")
                 else:
                     o_m, o_d, o_w = "  ", "  ", "  "
@@ -673,7 +673,7 @@ def style_target_grid(val):
         return "color: #ffffff; font-weight: bold; background-color: #d9534f;" 
     elif '\u200c' in val_str:
         return "color: #ffffff; font-weight: bold; background-color: #28a745;" 
-    elif "⚠️衝堂" in val_str:
+    elif ⚠️衝堂" in val_str:
         return "color: #000000; font-weight: bold; background-color: #ffc107;" 
     elif "班" in val_str:
         return "color: #2c3e50; font-weight: bold; background-color: #e2e8f0;" 
@@ -784,15 +784,16 @@ with tab_swap:
             with col_t2: substitute_mode = st.toggle("🆘 尋找代課老師", key="substitute_toggle")
             
             with st.container(border=True):
+                # 🚨 【錯誤修復區】：這裡原本因為雙引號包雙引號導致崩潰，現已全部改為內部使用單引號。
                 if substitute_mode:
                     st.markdown("🎯 **操作步驟：** 1️⃣ 點擊您欲請假的班級。 2️⃣ 在右側選擇指定的代課老師。", unsafe_allow_html=True)
                 elif advanced_mode:
                     st.markdown("""
-                        🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟</b></span> 或 <span style="color: #e67e22;"><b>🔗老師名字</b></span> 選擇對象。<br>
-                        <span style="color: #0066cc;"><b>🌟互</b></span>：兩人互調 &emsp; | &emsp; <span style="color: #e67e22;"><b>🔗多</b></span>：跨班連鎖或三角調
+                        🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style='color: #0066cc;'><b>🌟</b></span> 或 <span style='color: #e67e22;'><b>🔗老師名字</b></span> 選擇對象。<br>
+                        <span style='color: #0066cc;'><b>🌟互</b></span>：兩人互調 &emsp; | &emsp; <span style='color: #e67e22;'><b>🔗多</b></span>：跨班連鎖或三角調
                     """, unsafe_allow_html=True)
                 else:
-                    st.markdown("🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style="color: #0066cc;"><b>🌟 老師名字</b></span> 進行互調。", unsafe_allow_html=True)
+                    st.markdown("🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style='color: #0066cc;'><b>🌟 老師名字</b></span> 進行互調。", unsafe_allow_html=True)
 
             uni_my_grid = create_schedule_grid(df, my_name)
             uni_display_grid = uni_my_grid.copy()
