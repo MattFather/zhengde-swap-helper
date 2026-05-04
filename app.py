@@ -673,7 +673,7 @@ def style_target_grid(val):
         return "color: #ffffff; font-weight: bold; background-color: #d9534f;" 
     elif '\u200c' in val_str:
         return "color: #ffffff; font-weight: bold; background-color: #28a745;" 
-    elif ⚠️衝堂" in val_str:
+    elif "⚠️衝堂" in val_str:
         return "color: #000000; font-weight: bold; background-color: #ffc107;" 
     elif "班" in val_str:
         return "color: #2c3e50; font-weight: bold; background-color: #e2e8f0;" 
