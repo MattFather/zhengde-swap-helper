@@ -981,9 +981,19 @@ with tab_swap:
                 elif advanced_mode:
                     st.markdown("<div class='sub-title' style='font-size: 22px !important;'>💡 請選擇協助的［橋樑］老師</div>", unsafe_allow_html=True)
                     
-                    # 🌟 將日期的轉換資訊帶入選單的標籤中
+                    # 🌟 將日期的轉換資訊帶入選單，並加入權重排序
+                    sorted_chains = sorted(
+                        opt['chains'],
+                        key=lambda c: (
+                            0 if c['type'] == 'chain' else 1,  # 1. 跨班連鎖優先
+                            c['Teacher_C'],                    # 2. 依老師姓名
+                            day_en.index(c['Day_C']),          # 3. 依星期
+                            c['Period_C']                      # 4. 依節數
+                        )
+                    )
+                    
                     bridge_options = {}
-                    for c in opt['chains']:
+                    for c in sorted_chains:
                         t_type = "跨班連鎖" if c['type'] == 'chain' else "三角調"
                         d_zh = day_map_en_zh.get(c['Day_C'], "")
                         label = f"[{t_type}] {c['Teacher_C']}老師 ({d_zh}第{c['Period_C']}節)"
