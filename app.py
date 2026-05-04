@@ -183,6 +183,16 @@ def add_official_form(doc, sch_year, my_name, form_rows):
 
     copies = [("第一聯", "請假人保存"), ("第二聯", "教學組保存")]
 
+    # --- 計算請假區間 ---
+    valid_dates = [r['o_date'] for r in form_rows if pd.notnull(r['o_date'])]
+    if valid_dates:
+        min_date = min(valid_dates)
+        max_date = max(valid_dates)
+        date_str = f"自  {min_date.month}  月  {min_date.day}  日至  {max_date.month}  月  {max_date.day}  日"
+    else:
+        date_str = "自    月    日至    月    日"
+    # -------------------
+
     for idx, (copy_num, copy_desc) in enumerate(copies):
         # 標題行
         p_title = doc.add_paragraph()
@@ -196,13 +206,13 @@ def add_official_form(doc, sch_year, my_name, form_rows):
 
         p_title.add_run(f"\n\t{copy_desc}")
 
-        # 副標題行 (教師姓名與日期)
+        # 副標題行 (教師姓名與自動請假日期)
         p_sub = doc.add_paragraph()
         p_sub.alignment = WD_ALIGN_PARAGRAPH.LEFT
         run_s1 = p_sub.add_run("       教師 ")
         run_s2 = p_sub.add_run(f"{my_name}")
         run_s2.underline = True
-        run_s3 = p_sub.add_run("      假    日期：自    月    日至    月    日")
+        run_s3 = p_sub.add_run(f"      假    日期：{date_str}")
         for r in [run_s1, run_s2, run_s3]: r.font.size = Pt(12)
 
         # 建立表格
@@ -211,8 +221,8 @@ def add_official_form(doc, sch_year, my_name, form_rows):
         # 強制關閉自動調整，確保寬度設定生效
         table.autofit = False
 
-        # 【版面微調】：重新分配四個欄位的寬度 (總合 18.0 Cm)
-        widths = [Cm(1.2), Cm(1.2), Cm(3.0), Cm(12.6)]
+        # 【版面微調】：進一步縮減班級/科目，將空間給異動情形 (總合 18.0 Cm)
+        widths = [Cm(1.1), Cm(1.1), Cm(2.9), Cm(12.9)]
         for row in table.rows:
             for c_idx, w in enumerate(widths):
                 row.cells[c_idx].width = w
@@ -740,7 +750,7 @@ if my_name and my_name != st.session_state.last_user_name:
     st.session_state.last_user_name = my_name
 
     # ==============================================================
-    # 🌟 Google Sheets 發送資料魔法
+    # 🌟 Google Sheets 發送資料魔法 
     # ==============================================================
     API_URL = f"https://script.google.com/macros/s/AKfycbzlk8-pGvH1S83NWfQ3ThHaLNYjTksmu81-liK0MvouHhh_FV0ZpiotOMZAgKSPNk50rw/exec?name={my_name}"
     
