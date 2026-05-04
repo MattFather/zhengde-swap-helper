@@ -118,9 +118,8 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
 def create_schedule_grid(df, teacher_name):
     t_df = df[df['Teacher'] == teacher_name].copy()
     all_days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
-    all_periods = list(range(1, 9)) # 保證產生第1到第8節
+    all_periods = list(range(1, 9)) 
     
-    # 🌟 處理沒有課的老師：自動回傳空白表單
     if t_df.empty:
         grid = pd.DataFrame("", index=all_periods, columns=all_days)
     else:
@@ -754,13 +753,8 @@ st.markdown("<div class='main-title'>🏫 正德調課小幫手</div>", unsafe_a
 col_top1, col_top2, col_top3 = st.columns([1, 2, 1])
 with col_top2:
     all_teachers = sorted(df['Teacher'].dropna().unique())
-    col_name1, col_name2 = st.columns(2)
-    with col_name1:
-        sel_name = st.selectbox("🙋‍♂️ 下拉選擇您的名字：", all_teachers, index=None, placeholder="請選擇...")
-    with col_name2:
-        txt_name = st.text_input("✏️ 或自行輸入姓名：", placeholder="若名單無名字請輸入")
-    
-    my_name = txt_name.strip() if txt_name.strip() else sel_name
+    # 🌟 恢復乾淨俐落的單一下拉選單
+    my_name = st.selectbox("🙋‍♂️ 請選擇您的名字：", all_teachers, index=None, placeholder="請選擇...")
 
 if my_name and my_name != st.session_state.last_user_name:
     for k in state_keys: 
@@ -790,6 +784,18 @@ with tab_swap:
             advanced_mode = st.session_state.get("advanced_toggle", False)
             substitute_mode = st.session_state.get("substitute_toggle", False)
             
+            # 🌟 操作步驟完美安插在標題下方
+            with st.container(border=True):
+                if substitute_mode:
+                    st.markdown("🎯 **操作步驟：** 1️⃣ 點擊您欲請假的班級。 2️⃣ 在右側選擇指定的代課老師。", unsafe_allow_html=True)
+                elif advanced_mode:
+                    st.markdown("""
+                        🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style='color: #0066cc;'><b>🌟</b></span> 或 <span style='color: #e67e22;'><b>🔗老師名字</b></span> 選擇對象。<br>
+                        <span style='color: #0066cc;'><b>🌟互</b></span>：兩人互調 &emsp; | &emsp; <span style='color: #e67e22;'><b>🔗多</b></span>：跨班連鎖或三角調
+                    """, unsafe_allow_html=True)
+                else:
+                    st.markdown("🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style='color: #0066cc;'><b>🌟 老師名字</b></span> 進行互調。", unsafe_allow_html=True)
+
             uni_my_grid = create_schedule_grid(df, my_name)
             uni_display_grid = uni_my_grid.copy()
             
@@ -813,22 +819,11 @@ with tab_swap:
 
             event_uni = st.dataframe(styled_uni_grid, use_container_width=True, height=380, on_select="rerun", selection_mode="single-cell", key="uni_schedule_grid")
 
-            # 🌟 功能開關移至課表下方
+            # 🌟 開關移到課表下方
             st.markdown("<br>", unsafe_allow_html=True)
             col_t1, col_t2 = st.columns(2)
             with col_t1: st.toggle("🚀 解鎖進階多角調", key="advanced_toggle")
             with col_t2: st.toggle("🆘 尋找代課老師", key="substitute_toggle")
-            
-            with st.container(border=True):
-                if substitute_mode:
-                    st.markdown("🎯 **操作步驟：** 1️⃣ 點擊您欲請假的班級。 2️⃣ 在右側選擇指定的代課老師。", unsafe_allow_html=True)
-                elif advanced_mode:
-                    st.markdown("""
-                        🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style='color: #0066cc;'><b>🌟</b></span> 或 <span style='color: #e67e22;'><b>🔗老師名字</b></span> 選擇對象。<br>
-                        <span style='color: #0066cc;'><b>🌟互</b></span>：兩人互調 &emsp; | &emsp; <span style='color: #e67e22;'><b>🔗多</b></span>：跨班連鎖或三角調
-                    """, unsafe_allow_html=True)
-                else:
-                    st.markdown("🎯 **操作步驟：** 1️⃣ 點擊想調走的班級。 2️⃣ 點擊 <span style='color: #0066cc;'><b>🌟 老師名字</b></span> 進行互調。", unsafe_allow_html=True)
 
             selection_uni = event_uni.selection.cells
             if selection_uni:
@@ -870,13 +865,16 @@ with tab_swap:
                 st.markdown(f"<div class='sub-title'>🆘 安排代課老師</div>", unsafe_allow_html=True)
                 all_other_teachers = [t for t in all_teachers if t != my_name]
                 
-                col_sub1, col_sub2 = st.columns(2)
-                with col_sub1:
-                    sub_sel = st.selectbox("🧑‍🏫 下拉選擇代課老師：", all_other_teachers, index=None, placeholder="下拉尋找...")
-                with col_sub2:
-                    sub_txt = st.text_input("✏️ 或自行輸入姓名：", placeholder="例如：外聘代課")
+                # 🌟 一體化選單設計 (包含手動輸入)
+                sub_sel = st.selectbox("🧑‍🏫 選擇代課老師：", all_other_teachers + ["➕ 自行輸入其他老師..."], index=None, placeholder="下拉尋找...")
                 
-                sub_teacher = sub_txt.strip() if sub_txt.strip() else sub_sel
+                sub_teacher = ""
+                if sub_sel == "➕ 自行輸入其他老師...":
+                    sub_teacher = st.text_input("✏️ 請輸入代課老師姓名：", placeholder="例如：外聘代課")
+                elif sub_sel:
+                    sub_teacher = sub_sel
+                    
+                sub_teacher = sub_teacher.strip() if sub_teacher else None
                 
                 if sub_teacher:
                     st.markdown(f"<div class='sub-title'>👀 {sub_teacher}老師的課表變化</div>", unsafe_allow_html=True)
