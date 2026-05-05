@@ -284,7 +284,6 @@ def add_official_form(doc, sch_year, my_name, leave_type, form_rows):
                     t_p = row_data['t_period']
                     t_teacher = row_data['t_teacher']
 
-                    # 🌟 無論單純互調還是多角調，一律印出原本老師的姓名，清清楚楚交代軌跡
                     o_teacher = str(row_data.get('o_teacher', my_name)).strip()
                     cell_desc.text = f"☑ 1. {o_teacher}老師與  {t_m} 月  {t_d} 日星期  {t_w}  第 {t_p} 節   {t_teacher}   教師調課\n☐ 2. 請 __________________________________教師代課"
                 else:
@@ -562,7 +561,6 @@ def create_docx(sch_year, sch_term, issue_unit, leave_type, edited_df, my_name):
         rows = df_swaps[df_swaps["配對編號"] == pid]
         n = len(rows)
         
-        # 🌟 核心邏輯升級：2人互調印一筆，多人連鎖印出完整關係
         if n == 2:
             row_o = rows.iloc[0]
             row_t = rows.iloc[1]
@@ -830,14 +828,15 @@ with tab_swap:
                 orig = uni_my_grid.iloc[r_s, c_s]
                 uni_display_grid.iloc[r_s, c_s] = f"🔄[欲調走]\n{orig}"
                 
+                # 🌟 讓直接互調的星星，把「科目」也寫上去
                 for tb_key, opt in all_swaps.items():
                     r = opt['Period_B'] - 1
                     c = day_en.index(opt['Day_B'])
                     if opt['direct']:
-                        if advanced_mode: uni_display_grid.iloc[r, c] = f"🌟互\n{opt['Teacher_B']}"
-                        else: uni_display_grid.iloc[r, c] = f"🌟 {opt['Teacher_B']}"
+                        if advanced_mode: uni_display_grid.iloc[r, c] = f"🌟互\n{opt['Teacher_B']}\n{opt['Subject_X']}"
+                        else: uni_display_grid.iloc[r, c] = f"🌟\n{opt['Teacher_B']}\n{opt['Subject_X']}"
                     elif advanced_mode: 
-                        uni_display_grid.iloc[r, c] = f"🔗多\n{opt['Teacher_B']}"
+                        uni_display_grid.iloc[r, c] = f"🔗多\n{opt['Teacher_B']}\n{opt['Subject_X']}"
             
             try: styled_uni_grid = uni_display_grid.style.map(style_my_grid)
             except AttributeError: styled_uni_grid = uni_display_grid.style.applymap(style_my_grid)
@@ -893,7 +892,7 @@ with tab_swap:
                 with col_sub1:
                     sub_sel = st.selectbox("🧑‍🏫 下拉選擇校內老師：", all_other_teachers, index=None, placeholder="下拉尋找或搜尋...")
                 with col_sub2:
-                    sub_txt = st.text_input("✏️ 手動輸入：", placeholder="無課務師長或校外老師")
+                    sub_txt = st.text_input("✏️ 空白表格：", placeholder="0節課師長或校外老師")
                 
                 sub_teacher = sub_txt.strip() if sub_txt.strip() else sub_sel
                 
@@ -1009,11 +1008,13 @@ with tab_swap:
                         )
                     )
                     
+                    # 🌟 將「科目」一起帶進下拉選單標籤
                     bridge_options = {}
                     for c in sorted_chains:
                         t_type = "跨班連鎖" if c['type'] == 'chain' else "三角調"
                         d_zh = day_map_en_zh.get(c['Day_C'], "")
-                        label = f"[{t_type}] {c['Teacher_C']}老師 ({d_zh}第{c['Period_C']}節)"
+                        sub_c = c.get('Subject_C_W', c.get('Subject_W', ''))
+                        label = f"[{t_type}] {c['Teacher_C']}老師 ({d_zh}第{c['Period_C']}節 - {sub_c})"
                         bridge_options[label] = c
                         
                     selected_bridge = st.selectbox("橋樑老師選項", list(bridge_options.keys()), label_visibility="collapsed")
@@ -1109,7 +1110,7 @@ with tab_print:
         with c1: sch_year = st.text_input("學年度", value="114")
         with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
         
-        leave_options = ["", "課務需求","事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
+        leave_options = ["","課務需求", "事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
         with c3: leave_type = st.selectbox("假別", leave_options, index=0)
         
         with c4: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
