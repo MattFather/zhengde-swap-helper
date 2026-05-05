@@ -57,7 +57,6 @@ except FileNotFoundError:
 
 # ================= 3. 調課核心演算法 =================
 def find_all_swaps(df, my_name, target_class, my_day, my_period):
-    # 🌟 核心升級：動態時空預判函數，檢查老師是否空堂時，會自動排除「即將交出去」的那堂課
     def is_free(teacher, check_day, check_period, ignore_day, ignore_period):
         if check_day == ignore_day and check_period == ignore_period:
             return True
@@ -73,7 +72,6 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
         subject_x = row_b['Subject']
 
         if teacher_b == my_name: continue
-        # 檢查我方是否能上 B老師的課 (排除我即將換出去的課)
         if not is_free(my_name, day_b, period_b, my_day, my_period): continue
 
         tb_key = f"{day_b}_{period_b}"
@@ -83,17 +81,14 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
                 "Subject_X": subject_x, "direct": False, "chains": []
             }
 
-        # 檢查 B老師 是否能直接上我方的課 (排除B老師即將換出去的課)
         if is_free(teacher_b, my_day, my_period, day_b, period_b):
             options[tb_key]["direct"] = True
         else:
-            # B老師無法直接互調，抓出 B老師 在那個時段原本的課 (即將成為連鎖調課的橋樑)
             b_conflict = df[(df['Teacher'] == teacher_b) & (df['Day'] == my_day) & (df['Period'] == my_period)]
             if not b_conflict.empty:
                 class_w = b_conflict.iloc[0]['Class']
                 subject_w = b_conflict.iloc[0]['Subject']
 
-                # 跨班連鎖 (找 C老師)
                 if class_w != target_class:
                     for _, row_c in df[df['Class'] == class_w].iterrows():
                         teacher_c = row_c['Teacher']
@@ -102,10 +97,7 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
 
                         if teacher_c in [my_name, teacher_b]: continue
                         
-                        # B老師上 C老師的課，B老師有空嗎？ (排除 B老師換給我的課)
                         if not is_free(teacher_b, day_c, period_c, day_b, period_b): continue
-                        
-                        # C老師上 我的課，C老師有空嗎？ (排除 C老師換給B老師的課)
                         if not is_free(teacher_c, my_day, my_period, day_c, period_c): continue
 
                         options[tb_key]["chains"].append({
@@ -113,7 +105,6 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
                             "Class_W": class_w, "Subject_W": subject_w, "Subject_C_W": row_c['Subject'] 
                         })
 
-                # 同班三角調 (找 C老師)
                 for _, row_c in df[df['Class'] == target_class].iterrows():
                     teacher_c = row_c['Teacher']
                     day_c = row_c['Day']
@@ -1023,12 +1014,12 @@ with tab_swap:
                         )
                     )
                     
+                    # 🌟 移除選單標籤的科目名稱，保持版面清爽
                     bridge_options = {}
                     for c in sorted_chains:
                         t_type = "跨班連鎖" if c['type'] == 'chain' else "三角調"
                         d_zh = day_map_en_zh.get(c['Day_C'], "")
-                        sub_c = c.get('Subject_C_W', c.get('Subject_W', ''))
-                        label = f"[{t_type}] {c['Teacher_C']}老師 ({d_zh}第{c['Period_C']}節 - {sub_c})"
+                        label = f"[{t_type}] {c['Teacher_C']}老師 ({d_zh}第{c['Period_C']}節)"
                         bridge_options[label] = c
                         
                     selected_bridge = st.selectbox("橋樑老師選項", list(bridge_options.keys()), label_visibility="collapsed")
@@ -1124,8 +1115,9 @@ with tab_print:
         with c1: sch_year = st.text_input("學年度", value="114")
         with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
         
-        leave_options = ["", "事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
-        with c3: leave_type = st.selectbox("假別 (教務處存查聯用)", leave_options, index=0)
+        # 🌟 假別標題簡化，第一項放入課務需求
+        leave_options = ["", "課務需求", "事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
+        with c3: leave_type = st.selectbox("假別", leave_options, index=0)
         
         with c4: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
 
