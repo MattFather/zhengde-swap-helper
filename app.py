@@ -57,6 +57,12 @@ except FileNotFoundError:
 
 # ================= 3. 調課核心演算法 =================
 def find_all_swaps(df, my_name, target_class, my_day, my_period):
+    # 🌟 核心升級：動態時空預判函數，檢查老師是否空堂時，會自動排除「即將交出去」的那堂課
+    def is_free(teacher, check_day, check_period, ignore_day, ignore_period):
+        if check_day == ignore_day and check_period == ignore_period:
+            return True
+        return df[(df['Teacher'] == teacher) & (df['Day'] == check_day) & (df['Period'] == check_period)].empty
+
     options = {}
     class_x_schedule = df[df['Class'] == target_class]
 
@@ -67,7 +73,8 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
         subject_x = row_b['Subject']
 
         if teacher_b == my_name: continue
-        if not df[(df['Teacher'] == my_name) & (df['Day'] == day_b) & (df['Period'] == period_b)].empty: continue
+        # 檢查我方是否能上 B老師的課 (排除我即將換出去的課)
+        if not is_free(my_name, day_b, period_b, my_day, my_period): continue
 
         tb_key = f"{day_b}_{period_b}"
         if tb_key not in options:
@@ -76,42 +83,51 @@ def find_all_swaps(df, my_name, target_class, my_day, my_period):
                 "Subject_X": subject_x, "direct": False, "chains": []
             }
 
-        b_conflict = df[(df['Teacher'] == teacher_b) & (df['Day'] == my_day) & (df['Period'] == my_period)]
-
-        if b_conflict.empty:
+        # 檢查 B老師 是否能直接上我方的課 (排除B老師即將換出去的課)
+        if is_free(teacher_b, my_day, my_period, day_b, period_b):
             options[tb_key]["direct"] = True
         else:
-            class_w = b_conflict.iloc[0]['Class']
-            subject_w = b_conflict.iloc[0]['Subject']
+            # B老師無法直接互調，抓出 B老師 在那個時段原本的課 (即將成為連鎖調課的橋樑)
+            b_conflict = df[(df['Teacher'] == teacher_b) & (df['Day'] == my_day) & (df['Period'] == my_period)]
+            if not b_conflict.empty:
+                class_w = b_conflict.iloc[0]['Class']
+                subject_w = b_conflict.iloc[0]['Subject']
 
-            if class_w != target_class:
-                for _, row_c in df[df['Class'] == class_w].iterrows():
+                # 跨班連鎖 (找 C老師)
+                if class_w != target_class:
+                    for _, row_c in df[df['Class'] == class_w].iterrows():
+                        teacher_c = row_c['Teacher']
+                        day_c = row_c['Day']
+                        period_c = row_c['Period']
+
+                        if teacher_c in [my_name, teacher_b]: continue
+                        
+                        # B老師上 C老師的課，B老師有空嗎？ (排除 B老師換給我的課)
+                        if not is_free(teacher_b, day_c, period_c, day_b, period_b): continue
+                        
+                        # C老師上 我的課，C老師有空嗎？ (排除 C老師換給B老師的課)
+                        if not is_free(teacher_c, my_day, my_period, day_c, period_c): continue
+
+                        options[tb_key]["chains"].append({
+                            "type": "chain", "Teacher_C": teacher_c, "Day_C": day_c, "Period_C": period_c,
+                            "Class_W": class_w, "Subject_W": subject_w, "Subject_C_W": row_c['Subject'] 
+                        })
+
+                # 同班三角調 (找 C老師)
+                for _, row_c in df[df['Class'] == target_class].iterrows():
                     teacher_c = row_c['Teacher']
                     day_c = row_c['Day']
                     period_c = row_c['Period']
 
                     if teacher_c in [my_name, teacher_b]: continue
-                    if not df[(df['Teacher'] == teacher_b) & (df['Day'] == day_c) & (df['Period'] == period_c)].empty: continue
-                    if not df[(df['Teacher'] == teacher_c) & (df['Day'] == my_day) & (df['Period'] == my_period)].empty: continue
+                    
+                    if not is_free(teacher_b, day_c, period_c, day_b, period_b): continue
+                    if not is_free(teacher_c, my_day, my_period, day_c, period_c): continue
 
                     options[tb_key]["chains"].append({
-                        "type": "chain", "Teacher_C": teacher_c, "Day_C": day_c, "Period_C": period_c,
-                        "Class_W": class_w, "Subject_W": subject_w, "Subject_C_W": row_c['Subject'] 
+                        "type": "triangle", "Teacher_C": teacher_c, "Day_C": day_c, "Period_C": period_c,
+                        "Class_W": target_class, "Subject_W": row_c['Subject'] 
                     })
-
-            for _, row_c in df[df['Class'] == target_class].iterrows():
-                teacher_c = row_c['Teacher']
-                day_c = row_c['Day']
-                period_c = row_c['Period']
-
-                if teacher_c in [my_name, teacher_b]: continue
-                if not df[(df['Teacher'] == teacher_b) & (df['Day'] == day_c) & (df['Period'] == period_c)].empty: continue
-                if not df[(df['Teacher'] == teacher_c) & (df['Day'] == my_day) & (df['Period'] == my_period)].empty: continue
-
-                options[tb_key]["chains"].append({
-                    "type": "triangle", "Teacher_C": teacher_c, "Day_C": day_c, "Period_C": period_c,
-                    "Class_W": target_class, "Subject_W": row_c['Subject'] 
-                })
 
     return {k: v for k, v in options.items() if v["direct"] or v["chains"]}
 
@@ -284,7 +300,6 @@ def add_official_form(doc, sch_year, my_name, leave_type, form_rows):
                     t_p = row_data['t_period']
                     t_teacher = row_data['t_teacher']
 
-                    # 🌟 無論單純互調還是多角調，一律印出原本老師的姓名，清清楚楚交代軌跡
                     o_teacher = str(row_data.get('o_teacher', my_name)).strip()
                     cell_desc.text = f"☑ 1. {o_teacher}老師與  {t_m} 月  {t_d} 日星期  {t_w}  第 {t_p} 節   {t_teacher}   教師調課\n☐ 2. 請 __________________________________教師代課"
                 else:
@@ -562,7 +577,6 @@ def create_docx(sch_year, sch_term, issue_unit, leave_type, edited_df, my_name):
         rows = df_swaps[df_swaps["配對編號"] == pid]
         n = len(rows)
         
-        # 🌟 核心邏輯升級：2人互調印一筆，多人連鎖印出完整關係
         if n == 2:
             row_o = rows.iloc[0]
             row_t = rows.iloc[1]
@@ -834,10 +848,10 @@ with tab_swap:
                     r = opt['Period_B'] - 1
                     c = day_en.index(opt['Day_B'])
                     if opt['direct']:
-                        if advanced_mode: uni_display_grid.iloc[r, c] = f"🌟互\n{opt['Teacher_B']}"
-                        else: uni_display_grid.iloc[r, c] = f"🌟 {opt['Teacher_B']}"
+                        if advanced_mode: uni_display_grid.iloc[r, c] = f"🌟互\n{opt['Teacher_B']}\n{opt['Subject_X']}"
+                        else: uni_display_grid.iloc[r, c] = f"🌟\n{opt['Teacher_B']}\n{opt['Subject_X']}"
                     elif advanced_mode: 
-                        uni_display_grid.iloc[r, c] = f"🔗多\n{opt['Teacher_B']}"
+                        uni_display_grid.iloc[r, c] = f"🔗多\n{opt['Teacher_B']}\n{opt['Subject_X']}"
             
             try: styled_uni_grid = uni_display_grid.style.map(style_my_grid)
             except AttributeError: styled_uni_grid = uni_display_grid.style.applymap(style_my_grid)
@@ -893,7 +907,7 @@ with tab_swap:
                 with col_sub1:
                     sub_sel = st.selectbox("🧑‍🏫 下拉選擇校內老師：", all_other_teachers, index=None, placeholder="下拉尋找或搜尋...")
                 with col_sub2:
-                    sub_txt = st.text_input("✏️ 手動輸入：", placeholder="無課務師長或校外老師")
+                    sub_txt = st.text_input("✏️ 空白表格：", placeholder="0節課師長或校外老師")
                 
                 sub_teacher = sub_txt.strip() if sub_txt.strip() else sub_sel
                 
@@ -1013,7 +1027,8 @@ with tab_swap:
                     for c in sorted_chains:
                         t_type = "跨班連鎖" if c['type'] == 'chain' else "三角調"
                         d_zh = day_map_en_zh.get(c['Day_C'], "")
-                        label = f"[{t_type}] {c['Teacher_C']}老師 ({d_zh}第{c['Period_C']}節)"
+                        sub_c = c.get('Subject_C_W', c.get('Subject_W', ''))
+                        label = f"[{t_type}] {c['Teacher_C']}老師 ({d_zh}第{c['Period_C']}節 - {sub_c})"
                         bridge_options[label] = c
                         
                     selected_bridge = st.selectbox("橋樑老師選項", list(bridge_options.keys()), label_visibility="collapsed")
@@ -1109,8 +1124,8 @@ with tab_print:
         with c1: sch_year = st.text_input("學年度", value="114")
         with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
         
-        leave_options = ["", "課務需求","事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
-        with c3: leave_type = st.selectbox("假別", leave_options, index=0)
+        leave_options = ["", "事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
+        with c3: leave_type = st.selectbox("假別 (教務處存查聯用)", leave_options, index=0)
         
         with c4: issue_unit = st.text_input("發放單位", value="ＯＯＯ老師")
 
