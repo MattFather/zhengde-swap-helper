@@ -782,6 +782,9 @@ st.markdown("""
 
 st.markdown("<div class='main-title'>🏫 正德調課小幫手</div>", unsafe_allow_html=True)
 
+# 🌟 加上溫馨提醒小提示
+st.info("**溫馨提醒 :** \n課表可能因課務有調動，老師請假時，務必和任課老師確認後，再行遞送調課申請表~", icon="💡")
+
 col_top1, col_top2, col_top3 = st.columns([1, 2, 1])
 with col_top2:
     all_teachers = sorted(df['Teacher'].dropna().unique())
@@ -898,7 +901,7 @@ with tab_swap:
                 with col_sub1:
                     sub_sel = st.selectbox("🧑‍🏫 下拉選擇校內老師：", all_other_teachers, index=None, placeholder="下拉尋找或搜尋...")
                 with col_sub2:
-                    sub_txt = st.text_input("✏️ 空白表格：", placeholder="0節課師長或校外老師")
+                    sub_txt = st.text_input("✏️ 空白表格：", placeholder="無課務師長或校外老師")
                 
                 sub_teacher = sub_txt.strip() if sub_txt.strip() else sub_sel
                 
@@ -1115,7 +1118,6 @@ with tab_print:
         with c1: sch_year = st.text_input("學年度", value="114")
         with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
         
-        # 🌟 假別標題簡化，第一項放入課務需求
         leave_options = ["", "課務需求", "事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
         with c3: leave_type = st.selectbox("假別", leave_options, index=0)
         
