@@ -788,7 +788,7 @@ st.info("**溫馨提醒 :** \n課表可能因課務有調動，老師請假時�
 col_top1, col_top2, col_top3 = st.columns([1, 2, 1])
 with col_top2:
     all_teachers = sorted(df['Teacher'].dropna().unique())
-    my_name = st.selectbox("🙋‍♂️ 請選擇您的名字：", all_teachers, index=None, placeholder="請選擇...")
+    my_name = st.selectbox("🙋‍♂️ 請選擇或輸入您的名字：", all_teachers, index=None, placeholder="請選擇...")
 
 if my_name and my_name != st.session_state.last_user_name:
     for k in state_keys: 
