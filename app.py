@@ -1115,7 +1115,7 @@ with tab_print:
     with st.container(border=True):
         st.markdown("<div class='sub-title'>⚙️ 單據表頭設定</div>", unsafe_allow_html=True)
         c1, c2, c3, c4 = st.columns([1, 1, 1.5, 1])
-        with c1: sch_year = st.text_input("學年度", value="114")
+        with c1: sch_year = st.text_input("學年度", value="115")
         with c2: sch_term = st.selectbox("學期", ["一", "二"], index=1)
         
         leave_options = ["", "課務需求", "事假", "病假", "公假", "休假", "生理假", "家庭照顧假", "身心調適假", "婚假", "娩假", "喪假", "產前假", "流產假", "延長病假", "留職停薪", "陪產檢及陪產假", "骨髓或器官捐贈假", "原住民族歲時祭儀放假"]
